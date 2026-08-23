@@ -1,9 +1,10 @@
 // AppWarrior networking: RAII non-blocking sockets.
 //
-// POSIX backend (Linux/macOS) for now — the Windows backend joins the
-// platform phase behind this same interface. Sockets are non-blocking and
-// move-only; every operation returns std::expected<T, NetError>.
-// Applications drive readiness through aw::net::Poller — no busy-waiting.
+// Implemented with conditional compilation: WinSock2 on Windows, POSIX
+// sockets elsewhere (per project decision — see the modernization ledger,
+// Phase 5 follow-up). Sockets are non-blocking and move-only; every
+// operation returns std::expected<T, NetError>. Applications drive
+// readiness through aw::net::Poller — no busy-waiting.
 
 #pragma once
 
@@ -19,16 +20,25 @@
 
 namespace aw::net {
 
+// Native socket handle: int on POSIX, SOCKET (uintptr) on Windows.
+#if defined(_WIN32)
+using NativeSocket = std::uintptr_t;
+#else
+using NativeSocket = int;
+#endif
+
 class AW_API Socket {
  public:
   Socket() = default;
-  explicit Socket(int descriptor) noexcept : descriptor_(descriptor) {}
-  Socket(Socket&& other) noexcept : descriptor_(other.descriptor_) { other.descriptor_ = -1; }
+  explicit Socket(NativeSocket descriptor) noexcept : descriptor_(descriptor) {}
+  Socket(Socket&& other) noexcept : descriptor_(other.descriptor_) {
+    other.descriptor_ = kInvalid;
+  }
   auto operator=(Socket&& other) noexcept -> Socket& {
     if (this != &other) {
       close();
       descriptor_ = other.descriptor_;
-      other.descriptor_ = -1;
+      other.descriptor_ = kInvalid;
     }
     return *this;
   }
@@ -37,11 +47,12 @@ class AW_API Socket {
   Socket(const Socket&) = delete;
   auto operator=(const Socket&) = delete;
 
-  // Creates a non-blocking IPv4 TCP socket.
-  [[nodiscard]] static auto create_tcp() -> std::expected<Socket, NetError>;
+  // Creates a non-blocking stream socket for the given address family.
+  [[nodiscard]] static auto create_tcp(IpAddress::Family family)
+      -> std::expected<Socket, NetError>;
 
-  [[nodiscard]] auto descriptor() const noexcept -> int { return descriptor_; }
-  [[nodiscard]] auto is_open() const noexcept -> bool { return descriptor_ >= 0; }
+  [[nodiscard]] auto descriptor() const noexcept -> NativeSocket { return descriptor_; }
+  [[nodiscard]] auto is_open() const noexcept -> bool { return descriptor_ != kInvalid; }
 
   // Non-blocking connect: returns would_block while in progress (poll for
   // writability, then call connect again to collect the result).
@@ -61,21 +72,28 @@ class AW_API Socket {
   void close() noexcept;
 
  private:
-  int descriptor_ = -1;
+#if defined(_WIN32)
+  static constexpr NativeSocket kInvalid = static_cast<NativeSocket>(~static_cast<std::uintptr_t>(0));
+#else
+  static constexpr NativeSocket kInvalid = -1;
+#endif
+  NativeSocket descriptor_ = kInvalid;
 };
 
-// A non-blocking TCP listener bound to an IPv4 address. Port 0 selects an
+// A non-blocking stream listener bound to an address. Port 0 selects an
 // ephemeral port (query local_address()).
 class AW_API Listener {
  public:
   Listener() = default;
-  explicit Listener(int descriptor) noexcept : descriptor_(descriptor) {}
-  Listener(Listener&& other) noexcept : descriptor_(other.descriptor_) { other.descriptor_ = -1; }
+  explicit Listener(NativeSocket descriptor) noexcept : descriptor_(descriptor) {}
+  Listener(Listener&& other) noexcept : descriptor_(other.descriptor_) {
+    other.descriptor_ = kInvalid;
+  }
   auto operator=(Listener&& other) noexcept -> Listener& {
     if (this != &other) {
       close();
       descriptor_ = other.descriptor_;
-      other.descriptor_ = -1;
+      other.descriptor_ = kInvalid;
     }
     return *this;
   }
@@ -84,21 +102,28 @@ class AW_API Listener {
   Listener(const Listener&) = delete;
   auto operator=(const Listener&) = delete;
 
-  [[nodiscard]] static auto create_tcp() -> std::expected<Listener, NetError>;
+  [[nodiscard]] static auto create_tcp(IpAddress::Family family)
+      -> std::expected<Listener, NetError>;
   auto listen(const IpAddress& address, int backlog = 16) -> std::expected<void, NetError>;
   auto accept() -> std::expected<Socket, NetError>;  // would_block when none pending
 
-  [[nodiscard]] auto descriptor() const noexcept -> int { return descriptor_; }
+  [[nodiscard]] auto descriptor() const noexcept -> NativeSocket { return descriptor_; }
   auto local_address() const -> std::expected<IpAddress, NetError>;
   void close() noexcept;
 
  private:
-  int descriptor_ = -1;
+#if defined(_WIN32)
+  static constexpr NativeSocket kInvalid = static_cast<NativeSocket>(~static_cast<std::uintptr_t>(0));
+#else
+  static constexpr NativeSocket kInvalid = -1;
+#endif
+  NativeSocket descriptor_ = kInvalid;
 };
 
-// A connected pair of non-blocking stream sockets (AF_UNIX socketpair) —
-// the deterministic transport for integration tests, and useful for
-// in-process plumbing.
+// A connected pair of non-blocking stream sockets — the deterministic
+// transport for integration tests, and useful for in-process plumbing.
+// (AF_UNIX socketpair on POSIX; a loopback TCP pair on Windows, which has
+// no socketpair.)
 [[nodiscard]] auto make_socket_pair() -> std::expected<std::pair<Socket, Socket>, NetError>;
 
 }  // namespace aw::net

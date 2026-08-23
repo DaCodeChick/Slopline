@@ -28,7 +28,7 @@ namespace {
 // Drives both ends of a connection until `done` returns true or the
 // timeout expires. Returns false on timeout.
 template <typename Done>
-auto drive(Connection& a, Connection& b, Poller& poller, Done done,
+auto drive(ClientConnection& a, ServerConnection& b, Poller& poller, Done done,
            std::chrono::milliseconds timeout = std::chrono::milliseconds{5000}) -> bool {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   for (;;) {
@@ -62,7 +62,7 @@ auto drive(Connection& a, Connection& b, Poller& poller, Done done,
 // Pumps one connection and one raw socket (no Connection wrapper) until
 // `done` returns true or the timeout expires.
 template <typename Done>
-auto pump(Connection& connection, Socket& raw, Poller& poller, Done done,
+auto pump(ServerConnection& connection, Socket& raw, Poller& poller, Done done,
           std::chrono::milliseconds timeout = std::chrono::milliseconds{5000}) -> bool {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   for (;;) {
@@ -88,15 +88,13 @@ auto pump(Connection& connection, Socket& raw, Poller& poller, Done done,
 }
 
 auto make_pair_of_connections(ConnectionEvents& client_events, ConnectionEvents& server_events)
-    -> std::pair<std::unique_ptr<Connection>, std::unique_ptr<Connection>> {
+    -> std::pair<std::unique_ptr<ClientConnection>, std::unique_ptr<ServerConnection>> {
   auto pair = make_socket_pair();
   AW_CHECK(pair.has_value());
-  auto client =
-      std::make_unique<Connection>(ConnectionRole::client, ConnectionConfig{}, client_events);
-  auto server =
-      std::make_unique<Connection>(ConnectionRole::server, ConnectionConfig{}, server_events);
-  client->start_client(std::move(pair->first));
-  server->start_server(std::move(pair->second));
+  auto client = std::make_unique<ClientConnection>(ConnectionConfig{}, client_events);
+  auto server = std::make_unique<ServerConnection>(ConnectionConfig{}, server_events);
+  client->start(std::move(pair->first));
+  server->start(std::move(pair->second));
   return {std::move(client), std::move(server)};
 }
 
@@ -141,10 +139,10 @@ AW_TEST_CASE("establish: HTXF transfer handshake carries subVersion 3") {
   bool server_established = false;
   ConnectionEvents server_events;
   server_events.on_established = [&] { server_established = true; };
-  Connection client(ConnectionRole::client);
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  client.start_client(std::move(pair->first), kSubProtocolHtxf, kTransferSubVersion);
-  server.start_server(std::move(pair->second));
+  ClientConnection client;
+  ServerConnection server(ConnectionConfig{}, server_events);
+  client.start(std::move(pair->first), kSubProtocolHtxf, kTransferSubVersion);
+  server.start(std::move(pair->second));
 
   Poller poller;
   poller.add(client.descriptor(), PollInterest::read_write);
@@ -160,8 +158,8 @@ AW_TEST_CASE("establish: legacy NICK handshake alias is accepted") {
   bool server_established = false;
   ConnectionEvents server_events;
   server_events.on_established = [&] { server_established = true; };
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  server.start_server(std::move(pair->second));
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
   Socket& raw = pair->first;
 
   send_raw_handshake(raw, kProtocolVersion, kProtocolNick);
@@ -249,8 +247,8 @@ AW_TEST_CASE("multi-part transactions reassemble by (isReply, id)") {
     server_got = true;
     reassembled = transaction;
   };
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  server.start_server(std::move(pair->second));
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
   Socket& raw = pair->first;
 
   send_raw_handshake(raw);
@@ -289,8 +287,8 @@ AW_TEST_CASE("receive policy: dataSize zero kills the connection") {
   bool server_closed = false;
   ConnectionEvents server_events;
   server_events.on_closed = [&] { server_closed = true; };
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  server.start_server(std::move(pair->second));
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
   Socket& raw = pair->first;
 
   send_raw_handshake(raw);
@@ -317,8 +315,8 @@ AW_TEST_CASE("receive policy: oversized dataSize kills the connection") {
   bool server_closed = false;
   ConnectionEvents server_events;
   server_events.on_closed = [&] { server_closed = true; };
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  server.start_server(std::move(pair->second));
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
   Socket& raw = pair->first;
 
   send_raw_handshake(raw);
@@ -347,8 +345,8 @@ AW_TEST_CASE("incompatible handshake version is rejected with reason 1") {
   bool server_closed = false;
   ConnectionEvents server_events;
   server_events.on_closed = [&] { server_closed = true; };
-  Connection server(ConnectionRole::server, ConnectionConfig{}, server_events);
-  server.start_server(std::move(pair->second));
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
   Socket& raw = pair->first;
 
   send_raw_handshake(raw, 2);  // version 2 — incompatible
@@ -386,8 +384,8 @@ AW_TEST_CASE("encrypted transactions round-trip through TransactionCipher hooks"
 
   using Cipher = hotline::protocol::auth::TransactionCipher<aw::crypto::Sha1>;
 
-  Connection::CryptoHooks client_crypto;
-  Connection::CryptoHooks server_crypto;
+  ConnectionCryptoHooks client_crypto;
+  ConnectionCryptoHooks server_crypto;
   {
     const auto cipher = std::make_shared<Cipher>(password, session_key, true);
     client_crypto.choose_flag = [] { return 5; };

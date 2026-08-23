@@ -32,6 +32,66 @@ AW_TEST_CASE("IpAddress: text round-trip and octet form") {
   AW_CHECK(!IpAddress::from_text("abc").has_value());
 }
 
+AW_TEST_CASE("IpAddress: IPv6 parse and text round-trip") {
+  const auto loopback = IpAddress::from_text("::1");
+  AW_CHECK(loopback.has_value());
+  AW_CHECK(loopback->family() == IpAddress::Family::ipv6);
+  AW_CHECK(loopback->port() == 0);
+  AW_CHECK(loopback->to_text() == "[::1]:0");
+
+  const auto ported = IpAddress::from_text("[2001:db8::1]:5500");
+  AW_CHECK(ported.has_value());
+  AW_CHECK(ported->family() == IpAddress::Family::ipv6);
+  AW_CHECK(ported->port() == 5500);
+  AW_CHECK(ported->to_text() == "[2001:db8::1]:5500");
+  AW_CHECK(ported->ipv6_bytes()[15] == 1);
+
+  const auto full = IpAddress::from_text("2001:0db8:0000:0000:0000:0000:0000:0001");
+  AW_CHECK(full.has_value());
+  AW_CHECK(full->to_text() == "[2001:db8::1]:0");
+
+  AW_CHECK(!IpAddress::from_text("2001:::1").has_value());
+  AW_CHECK(!IpAddress::from_text("2001:0db8:0:0:0:0:0:0:1").has_value());  // 9 groups
+  AW_CHECK(!IpAddress::from_text("[::1]garbage").has_value());
+  // A trailing all-digit group stays part of the bare IPv6 host, so a
+  // five-digit "port" is rejected as an oversized hex group (ports on
+  // IPv6 require brackets).
+  AW_CHECK(!IpAddress::from_text("::1:70000").has_value());
+}
+
+AW_TEST_CASE("IPv6 loopback listener accepts connections (when available)") {
+  auto listener = Listener::create_tcp(IpAddress::Family::ipv6);
+  AW_CHECK(listener.has_value());
+  auto listener_value = std::move(*listener);
+  const auto bound = listener_value.listen(IpAddress::from_text("[::1]:0").value());
+  if (!bound.has_value()) {
+    // Environment without IPv6 loopback: nothing to test beyond parsing.
+    return;
+  }
+  const auto address = listener_value.local_address();
+  AW_CHECK(address.has_value());
+  AW_CHECK(address->family() == IpAddress::Family::ipv6);
+  AW_CHECK(address->port() != 0);
+
+  auto client = Socket::create_tcp(IpAddress::Family::ipv6);
+  AW_CHECK(client.has_value());
+  auto client_value = std::move(*client);
+  auto connecting = client_value.connect(*address);
+  if (!connecting.has_value() && connecting.error() == NetError::would_block) {
+    Poller poller;
+    poller.add(client_value.descriptor(), PollInterest::write);
+    AW_CHECK(poller.wait(std::chrono::milliseconds{2000}).has_value());
+    connecting = client_value.connect(*address);
+  }
+  AW_CHECK(connecting.has_value());
+
+  Poller accept_poller;
+  accept_poller.add(listener_value.descriptor(), PollInterest::read);
+  AW_CHECK(accept_poller.wait(std::chrono::milliseconds{2000}).has_value());
+  const auto accepted = listener_value.accept();
+  AW_CHECK(accepted.has_value());
+}
+
 AW_TEST_CASE("socket pair: echo round-trip and would-block") {
   auto pair = make_socket_pair();
   AW_CHECK(pair.has_value());
@@ -68,7 +128,7 @@ AW_TEST_CASE("socket pair: peer close reports connection_closed") {
 }
 
 AW_TEST_CASE("listener: connect, accept, and echo over loopback") {
-  auto listener = Listener::create_tcp();
+  auto listener = Listener::create_tcp(IpAddress::Family::ipv4);
   AW_CHECK(listener.has_value());
   auto listener_value = std::move(*listener);
 
@@ -78,7 +138,7 @@ AW_TEST_CASE("listener: connect, accept, and echo over loopback") {
   AW_CHECK(address.has_value());
   AW_CHECK(address->port() != 0);
 
-  auto client = Socket::create_tcp();
+  auto client = Socket::create_tcp(IpAddress::Family::ipv4);
   AW_CHECK(client.has_value());
   auto client_value = std::move(*client);
 

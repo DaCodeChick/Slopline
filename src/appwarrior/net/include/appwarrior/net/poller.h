@@ -1,10 +1,10 @@
 // AppWarrior networking: readiness poller.
 //
-// POSIX poll(2) backend for now (the Windows backend joins the platform
-// phase behind this same interface). An application registers its socket
-// descriptors with an interest mask and calls wait() from its event loop —
-// readiness-driven, never busy-waiting. EINTR is swallowed: wait() returns
-// an empty list and the caller simply waits again.
+// poll(2) on POSIX, WSAPoll on Windows (conditional compilation). An
+// application registers its socket descriptors with an interest mask and
+// calls wait() from its event loop — readiness-driven, never busy-waiting.
+// Interruption is swallowed: wait() returns an empty list and the caller
+// simply waits again.
 
 #pragma once
 
@@ -16,6 +16,7 @@
 
 #include "appwarrior/export.h"
 #include "appwarrior/net/net_error.h"
+#include "appwarrior/net/socket.h"
 
 namespace aw::net {
 
@@ -26,7 +27,7 @@ enum class PollInterest : std::uint8_t {
 };
 
 struct PollEvent {
-  int descriptor = -1;
+  NativeSocket descriptor = 0;
   bool readable = false;
   bool writable = false;
   bool closed = false;  // hang-up, error, or invalid descriptor
@@ -35,9 +36,9 @@ struct PollEvent {
 class AW_API Poller {
  public:
   // Registers (or replaces) the interest for a descriptor.
-  void add(int descriptor, PollInterest interest) noexcept;
-  void remove(int descriptor) noexcept;
-  [[nodiscard]] auto contains(int descriptor) const noexcept -> bool;
+  void add(NativeSocket descriptor, PollInterest interest) noexcept;
+  void remove(NativeSocket descriptor) noexcept;
+  [[nodiscard]] auto contains(NativeSocket descriptor) const noexcept -> bool;
 
   // Blocks up to `timeout` (negative = indefinitely) for readiness.
   // Returns an empty list on interruption.
@@ -45,7 +46,7 @@ class AW_API Poller {
       -> std::expected<std::vector<PollEvent>, NetError>;
 
  private:
-  std::map<int, short> interests_;  // descriptor -> poll(2) event mask
+  std::map<NativeSocket, short> interests_;  // descriptor -> poll(2) event mask
 };
 
 }  // namespace aw::net
