@@ -491,12 +491,12 @@ two-stage "HOPE" login:
 - `myField_MacAlg`(3588) = `00 02 09 "HMAC-SHA1"` (list of MAC algorithms: byte0=0 reserved,
   byte1=count=2, byte2=len=9, "HMAC-SHA1"; only the first entry is actually sent in the 12-byte
   buffer),
-- `myField_C_CipherAlg`(3772) = `00 01 08 "BLOWFISH"` (byte0=0, byte1=count=1, byte2=len=8,
+- `myField_C_CipherAlg`(3778) = `00 01 08 "BLOWFISH"` (byte0=0, byte1=count=1, byte2=len=8,
   "BLOWFISH").
 
 **Stage 2** S→C reply is expected to carry `myField_SessionKey`(3587), `myField_MacAlg`(3588)
 (server's choice: p-string "HMAC-SHA1" or "HMAC-MD5" after a 2-byte prefix), and
-`myField_S_CipherAlg`(3771) (p-string "BLOWFISH"). The client then computes
+`myField_S_CipherAlg`(3777) (p-string "BLOWFISH"). The client then computes
 `MacLogin = HMAC(login, sessionKey)`, `MacPassword = HMAC(password, sessionKey)` (using the
 negotiated hash) and sends a second `myTran_Login` with those 16/20-byte digests as
 `myField_UserLogin`/`myField_UserPassword`, echoing `myField_C_CipherAlg` and `myField_Vers`=197.
@@ -1004,7 +1004,7 @@ buffers or arithmetic. (Read-only observation; nothing was modified.)
 332 NewsArtNextArt 333 NewsArtData 334 NewsArtFlags 335 NewsArtParentArt
 336 NewsArt1stChildArt 337 NewsArtRecurseDel
 3587 SessionKey (0x0E03)  3588 MacAlg (0x0E04)
-3771 S_CipherAlg (0x0EC1) 3772 C_CipherAlg (0x0EC2)
+3777 S_CipherAlg (0x0EC1) 3778 C_CipherAlg (0x0EC2)
 ```
 
 Note the duplicate enum value `117` (both `myField_IconId` and `myField_Visible`) and `114`

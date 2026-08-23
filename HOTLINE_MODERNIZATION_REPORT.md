@@ -9,6 +9,11 @@ modernization implementation phase.
 **Source of truth:** `legacy/` — a read-only checkout of `https://github.com/Schala/Gloarbline`
 (773 files, ≈274k LOC: 211,882 C++, 38,154 headers, 20,761 C, 3,095 Rez resource source).
 
+> **Status update:** implementation has begun. The controlling modernization charter is now
+> **`AGENTS.md`** (it corrects this report's AppWarrior recommendation — AppWarrior is *preserved
+> and modernized*, not dismantled; see §25 Addendum). Implementation progress is tracked in
+> `docs/modernization-ledger.md`.
+
 **Method:** six independent read-only sub-audits (reports kept in `audit/01…06-*.md`), plus
 first-hand verification of every protocol-critical code path by the author of this report. Every
 claim below is evidence-based with `file:line` citations against `legacy/`; anything not settled by
@@ -854,8 +859,11 @@ what was replaced, why, what provides it now, how behavior was verified.
    algorithms) and capture reference vectors.
 4. **`SMyUserAccess` endianness** (raw native copy, `HotlineServTrans.cpp:1719`). Normalize in the
    new codec and verify against real clients; document the historical hazard.
-5. **Duplicate field IDs** (112/112, 114/114, 117/117): preserve the collisions verbatim (existing
-   peers depend on them); document prominently; do not "fix" silently.
+5. **Duplicate field IDs** (112/112, 114/114): preserve the collisions verbatim (existing
+   peers depend on them); document prominently; do not "fix" silently. *(Verified during
+   Phase 1 implementation: the previously listed "117/117" is NOT a field-ID collision —
+   transaction 117 (NotifyChatChangeUser) and field 117 (IconId) live in different ID
+   namespaces.)*
 6. **Build provenance:** no historical project files; exact defines/flags unknown (`DEBUG`,
    `NEW_TRACKSERV`, `USE_POOL_ALLOC`). Modern build defines its own configuration.
 7. **NewsSynch/NNTP:** whether to rebuild newsgroup sync depends on product scope; legacy `HLNZ`
@@ -916,9 +924,51 @@ Selected values cited throughout this report:
   RefNum=107, TransferSize=108, UserAccess=110, Vers=160, FileNameWithInfo=200, FileResumeData=203,
   FileXferOptions=204, FileComment=210, NewsCatListData=320, NewsCatListData15=323,
   NewsArtListData=321, NewsArtID=326, NewsArtData=333, SessionKey=3587, MacAlg=3588,
-  S_CipherAlg=3771, C_CipherAlg=3772, …
+  S_CipherAlg=3777, C_CipherAlg=3778, …
 - **Privileges:** 55 bits (0–54) in `SMyUserAccess` — DeleteFile, UploadFile, DownloadFile, …,
   ViewDropBoxes, MakeAlias, Broadcast, NewsPostArt, … AdmInSpector=53, PostBefore=54.
 
 *End of Phase 1 report. Per the assignment, implementation stops here pending review of this
 document and selection of the first modernization phase.*
+
+---
+
+## 25. Addendum — architectural direction update (supersedes conflicting recommendations)
+
+**The controlling charter is now `AGENTS.md`** (adopted after this report was written). Where this
+report conflicts with AGENTS.md, AGENTS.md wins. In particular:
+
+1. **AppWarrior is preserved and modernized** — not dismantled. This supersedes the
+   "dismantle AppWarrior" thrust of §19/§20 recommendations and any reading of §22 that drops the
+   framework. Modern AppWarrior is a lightweight native cross-platform C++23 framework; the Hotline
+   **client, server and tracker remain AppWarrior-based applications**. Its meaningful architecture
+   (application model, event model, views/windows/controls, timers, graphics, transport) survives;
+   its obsolete internals (classic-Mac handles, ANSI.h, QuickTime, Netscape-era code, hand-rolled
+   STL duplicates) do not.
+2. **Native UI only.** The UI layer is native/lightweight desktop technology — Cocoa/AppKit via
+   Objective-C++ at the macOS boundary, Wayland/X11 backends on Linux, native Win32/modern Windows
+   facilities on Windows. Electron, CEF-as-UI, browser-hosted UI and embedded-web UIs are all
+   excluded. This replaces §22's "ui: modern UI (Qt/web/etc.)" option.
+3. **Modular AppWarrior.** AppWarrior splits into separable components (core / platform / network /
+   UI / graphics). A headless Hotline server uses AppWarrior core without pulling in any GUI stack.
+   §22's `hotline::` module layering remains valid as the *application* architecture on top of the
+   framework.
+4. **Phase sequence re-mapped.** §23's 12 phases are amended so that AppWarrior core modernization
+   (types, containers, event/application model, platform backend boundaries) is a first-class
+   early track alongside the protocol work, instead of the framework being scheduled for removal.
+
+**Audit corrections verified during implementation** (per AGENTS.md: trusted source behavior wins,
+documentation updated):
+
+- **§24 risk #5** — the listed "117/117" duplicate is *not* a field-ID collision: transaction 117
+  (`NotifyChatChangeUser`) and field 117 (`IconId`) live in different ID namespaces. The real,
+  verbatim-preserved field-ID collisions are **112/112** (`UserFlags`/`Visible`) and **114/114**
+  (`ChatId`/`Number`). Verified against
+  `legacy/Apps/Common Files/HotlineClientServerCommon.h:106,117,121`.
+- **Field IDs 3771/3772** — the historical header assigns `myField_S_CipherAlg = 0x0EC1` and
+  `myField_C_CipherAlg = 0x0EC2`, which are **3777 and 3778**; the adjacent `// 3771` / `// 3772`
+  comments are arithmetic typos. The compiled hex literals (used identically by the tree's client
+  and server) are authoritative; Appendix B and `audit/06` have been corrected.
+
+**Implementation status:** Phase 1 of the implementation (build foundation + `hotline::protocol`
+wire codec with golden-vector tests) is complete — see `docs/modernization-ledger.md`.
