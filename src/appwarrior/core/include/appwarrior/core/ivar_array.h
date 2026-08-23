@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "appwarrior/core/endian.h"
+#include "appwarrior/export.h"
 
 namespace aw::ivar {
 
@@ -64,14 +65,14 @@ struct Array {
 };
 
 // Never throws, never reads out of bounds.
-[[nodiscard]] auto decode(std::span<const std::byte> bytes) -> std::expected<Array, DecodeError>;
+[[nodiscard]] AW_API auto decode(std::span<const std::byte> bytes) -> std::expected<Array, DecodeError>;
 
 // First item with the given ID, or nullptr (IDs are normally unique; the
 // shipped UError(1).dat catalog is the documented exception).
-[[nodiscard]] auto find(const Array& array, std::uint32_t id) noexcept -> const Item*;
+[[nodiscard]] AW_API auto find(const Array& array, std::uint32_t id) noexcept -> const Item*;
 
 // Data of the first item with the given ID; empty span if absent.
-[[nodiscard]] auto item_data(const Array& array, std::uint32_t id) noexcept
+[[nodiscard]] AW_API auto item_data(const Array& array, std::uint32_t id) noexcept
     -> std::span<const std::byte>;
 
 }  // namespace aw::ivar

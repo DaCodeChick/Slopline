@@ -982,5 +982,6 @@ the encrypted-transaction cipher and the HOPE login codec (Phase 3b); framework 
 with general-purpose promotions (Phase 3c); AppWarrior consolidated into a single monolithic
 static library (Phase 3d); FILP/RFLT/folder-item/`harc`/tracker codecs (Phase 4); AppWarrior
 as a shared library + fully expected-based (exception-free) production error handling
-(Phase 4b) — 122/122 tests across gcc/clang/ASan-UBSan. See
+(Phase 4b); configurable library shape via BUILD_SHARED_LIBS / BUILD_MONOLITHIC with AW_API
+Windows exports (Phase 4c) — 122/122 tests across all five build configurations. See
 `docs/modernization-ledger.md`.

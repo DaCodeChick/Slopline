@@ -20,6 +20,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(HOTLINE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(HOTLINE_BUILD_TESTS "Build Hotline tests" ON)
 option(HOTLINE_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(BUILD_MONOLITHIC "Build AppWarrior as a single monolithic library" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)

@@ -21,11 +21,13 @@
 #include <cstdint>
 #include <span>
 
+#include "appwarrior/export.h"
+
 namespace aw::crypto {
 
 inline constexpr std::size_t kBlowfishBlockSize = 8;
 
-class Blowfish {
+class AW_API Blowfish {
  private:
   struct Schedule {
     std::array<std::uint32_t, 18> p{};
@@ -59,7 +61,7 @@ class Blowfish {
       -> std::array<std::byte, kBlowfishBlockSize>;
 
   // OFB-64 stream state (zero IV; byte offset persists across calls).
-  class Ofb64 {
+  class AW_API Ofb64 {
    public:
     void reset() noexcept;
 

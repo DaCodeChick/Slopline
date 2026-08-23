@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <span>
 
+#include "appwarrior/export.h"
+
 namespace aw::crypto {
 
 struct Sha1 {
@@ -16,7 +18,7 @@ struct Sha1 {
   static constexpr std::size_t digest_size = 20;
   using Digest = std::array<std::byte, digest_size>;
 
-  [[nodiscard]] static auto digest(std::span<const std::byte> message) -> Digest;
+  [[nodiscard]] AW_API static auto digest(std::span<const std::byte> message) -> Digest;
 };
 
 }  // namespace aw::crypto

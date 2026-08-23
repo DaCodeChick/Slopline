@@ -17,6 +17,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 3d | AppWarrior consolidated into a single monolithic library | **Complete** |
 | 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | **Complete** |
 | 4b | Shared-library AppWarrior + exception-free expected-based error handling | **Complete** |
+| 4c | Configurable library shape (BUILD_SHARED_LIBS / BUILD_MONOLITHIC) + AW_API exports | **Complete** |
 | 5 | Networking (RAII transport, establish/session state machines) | Recommended next |
 | 6+ | Server core, client core, tracker app, UI backends | Planned |
 
@@ -444,6 +445,29 @@ builder (the reference tree's server never sent one — client-only feature).
   both directions, stream continuity across transactions, 1-byte-payload fix), HOPE stage
   goldens + parse tests + digest goldens from an independent python implementation.
 - gcc, clang, ASan/UBSan presets: 98/98 pass, warnings-as-errors clean.
+
+## Phase 4c — Configurable AppWarrior library shape + AW_API exports
+
+AppWarrior's linkage is now fully configurable, per project decision (AGENTS.md amended):
+
+- **`BUILD_SHARED_LIBS`** (standard CMake option, default ON): shared vs static libraries.
+- **`BUILD_MONOLITHIC`** (default ON): one `appwarrior` library (`appwarrior::appwarrior`);
+  OFF restores the per-component targets (`appwarrior::core`, `appwarrior::crypto`,
+  `appwarrior::testing`).
+- Consumers always link the aggregate **`appwarrior::framework`** target, which resolves to
+  the right set of libraries in either mode — `hotline::protocol` and the tests were switched
+  to it, so no consumer code changes across configurations.
+- **`AW_API`** (`appwarrior/export.h`): `__declspec(dllexport)` while building /
+  `__declspec(dllimport)` while consuming on Windows (behind the `AW_BUILDING_LIBRARY`
+  definition, set privately on the compiled targets when shared), empty elsewhere. Applied to
+  the out-of-line public symbols (`aw::ivar` codec functions, `Md5::digest`, `Sha1::digest`,
+  `Blowfish` + `Ofb64`); header-only inline facilities need no export annotation. The blanket
+  `WINDOWS_EXPORT_ALL_SYMBOLS` was removed.
+
+**Verification:** new `static` (monolithic, BUILD_SHARED_LIBS=OFF) and `modular`
+(BUILD_MONOLITHIC=OFF, per-component shared) presets; all configurations pass 122/122 —
+gcc (monolith shared), static (monolith static, `libappwarrior.a`), modular
+(`libappwarrior_core.so` + `libappwarrior_crypto.so`), clang, and ASan/UBSan.
 
 ### Recommended next phase
 

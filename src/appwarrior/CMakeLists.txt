@@ -1,37 +1,101 @@
 # AppWarrior — lightweight native cross-platform C++23 application framework.
 #
-# ONE monolithic SHARED library (project decision; see AGENTS.md
-# "AppWarrior Modularity"): the framework ships as a single dynamic
-# library that all Hotline applications link against. Components are
-# organized by directory and namespace (aw::endian/bits/align/ivar/guid,
-# aw::crypto, aw::test; UI and platform backends join later under their
-# own subdirectories and become part of the same library). C++ namespaces
-# use the short prefix `aw`; the CMake target uses the full framework name
-# (`appwarrior::appwarrior`); test macros are AW_-prefixed.
+# Library shape is configurable:
+#   BUILD_MONOLITHIC (default ON)  — one 'appwarrior' library
+#                                    (target appwarrior::appwarrior).
+#   BUILD_MONOLITHIC OFF           — per-component targets
+#                                    (appwarrior::core, appwarrior::crypto,
+#                                     appwarrior::testing).
+#   BUILD_SHARED_LIBS (default ON) — shared library; OFF — static.
+#
+# Consumers link the aggregate target appwarrior::framework, which resolves
+# to the correct set of targets in either mode. Windows DLL exports use the
+# AW_API macro (appwarrior/export.h) — no blanket WINDOWS_EXPORT_ALL_SYMBOLS.
+# Components are organized by directory and namespace (aw::endian/bits/
+# align/ivar/guid, aw::crypto, aw::test); UI and platform backends join
+# later under their own subdirectories. C++ namespaces use the short prefix
+# `aw`; test macros are AW_-prefixed.
 
-add_library(appwarrior SHARED
-  core/src/ivar_array.cpp
-  crypto/src/md5.cpp
-  crypto/src/sha1.cpp
-  crypto/src/blowfish.cpp
-)
-add_library(appwarrior::appwarrior ALIAS appwarrior)
+option(BUILD_MONOLITHIC "Build AppWarrior as a single monolithic library" ON)
 
-set_target_properties(appwarrior PROPERTIES
-  VERSION ${PROJECT_VERSION}
-  SOVERSION ${PROJECT_VERSION_MAJOR}
-  # The framework has no dllexport annotations yet; export everything for
-  # Windows builds until per-symbol visibility is introduced with the UI
-  # backends.
-  WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
+if(BUILD_MONOLITHIC)
+  add_library(appwarrior
+    core/src/ivar_array.cpp
+    crypto/src/md5.cpp
+    crypto/src/sha1.cpp
+    crypto/src/blowfish.cpp
+  )
+  add_library(appwarrior::appwarrior ALIAS appwarrior)
 
-target_include_directories(appwarrior PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/crypto/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/testing/include>
-)
-target_compile_features(appwarrior PUBLIC cxx_std_23)
+  target_include_directories(appwarrior PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/crypto/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/testing/include>
+  )
+  target_compile_features(appwarrior PUBLIC cxx_std_23)
+  hotline_enable_warnings(appwarrior)
+  hotline_enable_sanitizers(appwarrior)
 
-hotline_enable_warnings(appwarrior)
-hotline_enable_sanitizers(appwarrior)
+  if(BUILD_SHARED_LIBS)
+    set_target_properties(appwarrior PROPERTIES
+      VERSION ${PROJECT_VERSION}
+      SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+    target_compile_definitions(appwarrior PRIVATE AW_BUILDING_LIBRARY)
+  endif()
+
+  add_library(appwarrior_framework INTERFACE)
+  target_link_libraries(appwarrior_framework INTERFACE appwarrior)
+else()
+  add_library(appwarrior_core
+    core/src/ivar_array.cpp
+  )
+  add_library(appwarrior::core ALIAS appwarrior_core)
+
+  add_library(appwarrior_crypto
+    crypto/src/md5.cpp
+    crypto/src/sha1.cpp
+    crypto/src/blowfish.cpp
+  )
+  add_library(appwarrior::crypto ALIAS appwarrior_crypto)
+  target_link_libraries(appwarrior_crypto PUBLIC appwarrior_core)
+
+  add_library(appwarrior_testing INTERFACE)
+  add_library(appwarrior::testing ALIAS appwarrior_testing)
+
+  target_include_directories(appwarrior_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/include>
+  )
+  target_include_directories(appwarrior_crypto PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/crypto/include>
+  )
+  target_include_directories(appwarrior_testing INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/testing/include>
+  )
+
+  target_compile_features(appwarrior_core PUBLIC cxx_std_23)
+  target_compile_features(appwarrior_crypto PUBLIC cxx_std_23)
+  target_compile_features(appwarrior_testing INTERFACE cxx_std_23)
+  hotline_enable_warnings(appwarrior_core)
+  hotline_enable_warnings(appwarrior_crypto)
+  hotline_enable_sanitizers(appwarrior_core)
+  hotline_enable_sanitizers(appwarrior_crypto)
+
+  if(BUILD_SHARED_LIBS)
+    set_target_properties(appwarrior_core appwarrior_crypto PROPERTIES
+      VERSION ${PROJECT_VERSION}
+      SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+    target_compile_definitions(appwarrior_core PRIVATE AW_BUILDING_LIBRARY)
+    target_compile_definitions(appwarrior_crypto PRIVATE AW_BUILDING_LIBRARY)
+  endif()
+
+  add_library(appwarrior_framework INTERFACE)
+  target_link_libraries(appwarrior_framework INTERFACE
+    appwarrior_core
+    appwarrior_crypto
+    appwarrior_testing
+  )
+endif()
+
+add_library(appwarrior::framework ALIAS appwarrior_framework)

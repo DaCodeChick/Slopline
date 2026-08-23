@@ -1270,9 +1270,14 @@ AppWarrior itself should have sufficiently modular components that non-GUI appli
 
 # AppWarrior Modularity
 
-> **Amended (project decision):** AppWarrior ships as **one monolithic SHARED library**
-> (CMake target `appwarrior`, alias `appwarrior::appwarrior` — `libappwarrior.so` /
-> `libappwarrior.dylib` / `appwarrior.dll`), not separate per-component targets.
+> **Amended (project decision):** AppWarrior's library shape is **configurable**: by default
+> it ships as **one monolithic SHARED library** (CMake target `appwarrior`, alias
+> `appwarrior::appwarrior`). `BUILD_MONOLITHIC=OFF` builds per-component targets
+> (`appwarrior::core`, `appwarrior::crypto`, `appwarrior::testing`), and the standard
+> `BUILD_SHARED_LIBS=OFF` selects static libraries. Consumers always link the aggregate
+> target **`appwarrior::framework`**, which resolves correctly in either mode. Windows DLL
+> exports use the `AW_API` macro (`appwarrior/export.h` — `__declspec(dllexport/dllimport)`
+> behind `AW_BUILDING_LIBRARY`); no blanket `WINDOWS_EXPORT_ALL_SYMBOLS`.
 
 The *component organization* survives as a source-level structure, not a linkage structure:
 
@@ -1286,11 +1291,11 @@ src/appwarrior/
 ```
 
 Each component keeps its own directory and namespace, so the conceptual decomposition is
-preserved at the source level even though everything ships in one dynamic library. (Note: a
-shared library links ALL of its objects, so the earlier static-linker argument no longer
-applies — the framework is one deliberately-monolithic deliverable; keep platform backends
-behind the header/namespace boundaries so the code organization remains clean.) This replaces
-the earlier multi-target plan; do not reintroduce per-component library targets.
+preserved at the source level regardless of the chosen linkage shape. (Note: a shared library
+links ALL of its objects, so the static-linker argument applies only in static builds; keep
+platform backends behind the header/namespace boundaries so the code organization remains
+clean in every configuration.) All four combinations of the two options are supported and
+tested; do not introduce additional ad-hoc library targets — use the component list above.
 
 ---
 
@@ -1388,8 +1393,10 @@ Support building appropriate targets independently.
 For example:
 
 ```text
-appwarrior            (the one monolithic shared library — see "AppWarrior Modularity")
-hotline::protocol     (protocol codec library)
+appwarrior::framework  (aggregate of the AppWarrior library/libraries — see
+                        "AppWarrior Modularity" for BUILD_MONOLITHIC /
+                        BUILD_SHARED_LIBS)
+hotline::protocol      (protocol codec library)
 Hotline client
 Hotline server
 Hotline tracker

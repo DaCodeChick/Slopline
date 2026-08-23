@@ -42,34 +42,94 @@
       "cacheVariables": {
         "HOTLINE_SANITIZE": "ON"
       }
+    },
+    {
+      "name": "static",
+      "displayName": "GCC, monolithic STATIC AppWarrior (BUILD_SHARED_LIBS=OFF)",
+      "inherits": "gcc",
+      "binaryDir": "${sourceDir}/build/static",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "OFF"
+      }
+    },
+    {
+      "name": "modular",
+      "displayName": "GCC, per-component shared AppWarrior (BUILD_MONOLITHIC=OFF)",
+      "inherits": "gcc",
+      "binaryDir": "${sourceDir}/build/modular",
+      "cacheVariables": {
+        "BUILD_MONOLITHIC": "OFF"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "default", "configurePreset": "default" },
-    { "name": "gcc", "configurePreset": "gcc" },
-    { "name": "clang", "configurePreset": "clang" },
-    { "name": "asan", "configurePreset": "asan" }
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "gcc",
+      "configurePreset": "gcc"
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "static",
+      "configurePreset": "static"
+    },
+    {
+      "name": "modular",
+      "configurePreset": "modular"
+    }
   ],
   "testPresets": [
     {
       "name": "default",
       "configurePreset": "default",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "gcc",
       "configurePreset": "gcc",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "clang",
       "configurePreset": "clang",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "asan",
       "configurePreset": "asan",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "static",
+      "configurePreset": "static",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "modular",
+      "configurePreset": "modular",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

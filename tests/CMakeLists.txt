@@ -22,7 +22,7 @@ add_executable(hotline_protocol_tests
   protocol/test_archive.cpp
   protocol/test_tracker.cpp
 )
-target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::appwarrior)
+target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::framework)
 
 hotline_enable_warnings(hotline_protocol_tests)
 hotline_enable_sanitizers(hotline_protocol_tests)

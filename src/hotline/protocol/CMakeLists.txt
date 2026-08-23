@@ -21,7 +21,7 @@ target_include_directories(hotline_protocol PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 target_compile_features(hotline_protocol PUBLIC cxx_std_23)
-target_link_libraries(hotline_protocol PUBLIC appwarrior::appwarrior)
+target_link_libraries(hotline_protocol PUBLIC appwarrior::framework)
 find_package(ZLIB REQUIRED)
 target_link_libraries(hotline_protocol PRIVATE ZLIB::ZLIB)
 
