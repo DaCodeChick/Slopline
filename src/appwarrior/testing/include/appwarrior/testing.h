@@ -1,9 +1,18 @@
-// Minimal dependency-free test harness.
+// AppWarrior testing component.
 //
-// Deliberately tiny (registry + CHECK macros + a hex helper): the value is
-// in the tests, and a zero-dependency harness keeps the build fully
-// offline and auditable. It can be swapped for doctest later without
-// touching the test bodies if that ever pays off.
+// A tiny, dependency-free unit-test facility that ships with the framework,
+// so every AppWarrior-based application (Hotline client/server/tracker,
+// AppWarrior's own modules) shares one test vocabulary without pulling in a
+// heavyweight third-party test framework. It is intentionally minimal — a
+// test-case registry, assertion macros, byte-comparison helpers and a
+// runner — and is deliberately replaceable: nothing outside it depends on
+// its internals.
+//
+// Everything lives in namespace appwarrior::test except the registration
+// macros, which genuinely require preprocessing (a TEST_CASE must expand at
+// its declaration site) and are therefore prefixed AW_ — the one case where
+// a prefix is unavoidable, per AGENTS.md ("keep macros only when
+// preprocessing itself is genuinely required").
 
 #pragma once
 
@@ -19,14 +28,14 @@
 #include <string_view>
 #include <vector>
 
-namespace hotline_test {
+namespace appwarrior::test {
 
 struct Case {
   std::string_view name;
   void (*run)();
 };
 
-[[nodiscard]] inline auto& registry() {
+[[nodiscard]] inline auto registry() -> std::vector<Case>& {
   static std::vector<Case> cases;
   return cases;
 }
@@ -35,7 +44,7 @@ struct Registrar {
   Registrar(std::string_view name, void (*run)()) { registry().push_back({name, run}); }
 };
 
-// Thrown by CHECK failures to abort the current test case.
+// Thrown by assertion failures to abort the current test case.
 struct CheckFailed final : std::exception {
   [[nodiscard]] auto what() const noexcept -> const char* override { return "check failed"; }
 };
@@ -116,24 +125,55 @@ inline void require_bytes(std::span<const std::byte> actual, std::string_view ex
   throw CheckFailed{};
 }
 
-}  // namespace hotline_test
+// Runs every registered test case; returns 0 when all pass, 1 otherwise.
+// Intended as the body of a test executable's main():
+//
+//   int main() { return appwarrior::test::run_all_tests(); }
+inline auto run_all_tests() -> int {
+  std::size_t failed = 0;
+  for (const Case& test : registry()) {
+    try {
+      test.run();
+      std::println("PASS {}", test.name);
+    } catch (const CheckFailed&) {
+      std::println("FAIL {}", test.name);
+      ++failed;
+    } catch (const std::exception& error) {
+      std::println("FAIL {} (exception: {})", test.name, error.what());
+      ++failed;
+    } catch (...) {
+      std::println("FAIL {} (unknown exception)", test.name);
+      ++failed;
+    }
+  }
+  std::println("{} test case(s), {} failed", registry().size(), failed);
+  return failed == 0 ? 0 : 1;
+}
 
-#define HOTLINE_TEST_CAT_IMPL(a, b) a##b
-#define HOTLINE_TEST_CAT(a, b) HOTLINE_TEST_CAT_IMPL(a, b)
+}  // namespace appwarrior::test
 
-#define TEST_CASE(name)                                                              \
-  static void HOTLINE_TEST_CAT(hotline_test_fn_, __LINE__)();                        \
-  static ::hotline_test::Registrar HOTLINE_TEST_CAT(hotline_test_reg_, __LINE__)(    \
-      name, &HOTLINE_TEST_CAT(hotline_test_fn_, __LINE__));                          \
-  static void HOTLINE_TEST_CAT(hotline_test_fn_, __LINE__)()
+// ---------------------------------------------------------------------------
+// Registration macros (AW_-prefixed: macros cannot be namespaced)
+// ---------------------------------------------------------------------------
 
-#define CHECK(expression)                                            \
-  do {                                                               \
-    if (!(expression)) {                                             \
-      ::hotline_test::check_failed(#expression);                     \
-    }                                                                \
+#define AW_TEST_CAT_IMPL(a, b) a##b
+#define AW_TEST_CAT(a, b) AW_TEST_CAT_IMPL(a, b)
+
+#define AW_TEST_CASE(name)                                                        \
+  static void AW_TEST_CAT(aw_test_fn_, __LINE__)();                               \
+  static ::appwarrior::test::Registrar AW_TEST_CAT(aw_test_reg_, __LINE__)(       \
+      name, &AW_TEST_CAT(aw_test_fn_, __LINE__));                                 \
+  static void AW_TEST_CAT(aw_test_fn_, __LINE__)()
+
+#define AW_CHECK(expression)                                                      \
+  do {                                                                            \
+    if (!(expression)) {                                                          \
+      ::appwarrior::test::check_failed(#expression);                              \
+    }                                                                             \
   } while (false)
 
-#define REQUIRE_BYTES(actual, hex) ::hotline_test::require_bytes((actual), (hex), "")
-#define REQUIRE_BYTES_MSG(actual, hex, context) \
-  ::hotline_test::require_bytes((actual), (hex), (context))
+#define AW_FAIL(message) ::appwarrior::test::fail((message))
+
+#define AW_REQUIRE_BYTES(actual, hex) ::appwarrior::test::require_bytes((actual), (hex), "")
+#define AW_REQUIRE_BYTES_MSG(actual, hex, context) \
+  ::appwarrior::test::require_bytes((actual), (hex), (context))

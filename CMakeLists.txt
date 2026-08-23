@@ -25,6 +25,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)
 include(Sanitizers)
 
+add_subdirectory(src/appwarrior)
 add_subdirectory(src/hotline/protocol)
 
 if(HOTLINE_BUILD_TESTS)

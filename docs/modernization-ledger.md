@@ -8,6 +8,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | Phase | Name | Status |
 |---|---|---|
 | 1 | Build foundation + `hotline::protocol` wire codec | **Complete** |
+| 1b | AppWarrior `testing` component (framework test facility) | **Complete** |
 | 2 | AppWarrior Core foundation (types, containers, event/application model seams) | Recommended next |
 | 3 | Protocol payloads + legacy auth codecs (scramble, HMAC key schedule, HOPE) | Planned |
 | 4+ | Net/transport, server core, client core, tracker, UI backends | Planned |
@@ -39,9 +40,10 @@ New library `hotline::protocol` (`src/hotline/protocol/`), pure C++23, zero depe
 
 Tests (`tests/protocol/`, 39 cases): golden byte vectors, round-trips, boundary values,
 malformed/truncated/trailing input, historical validation policy, encode-side limit checks.
-Test harness (`tests/support/`) is deliberately dependency-free (~120 lines, registry + CHECK +
-hex helpers): the value is in the tests, and a zero-fetch build stays fully offline/auditable. It
-can be swapped for doctest without touching test bodies if that ever pays off.
+The test harness now lives in the framework itself — promoted to the `appwarrior::testing`
+component in Phase 1b below (deliberately dependency-free: a zero-fetch build stays fully
+offline/auditable, and it can be swapped for doctest without touching test bodies if that ever
+pays off).
 
 ### Preserved semantics (byte-for-byte)
 
@@ -106,13 +108,39 @@ can be swapped for doctest without touching test bodies if that ever pays off.
 - Text encoding: wire text stays raw bytes; MacRoman→UTF-8 conversion is a UI-boundary decision
   (report §24.1).
 
+---
+
+## Phase 1b — AppWarrior `testing` component
+
+Promoted the Phase 1 test harness from `tests/support/` into the framework as the **first modern
+AppWarrior component**: `src/appwarrior/testing/include/appwarrior/testing.h`, INTERFACE target
+`appwarrior::testing`, registered from `src/appwarrior/CMakeLists.txt`.
+
+**Why it belongs in the framework** (per AGENTS.md): a unit-test facility is shared infrastructure
+every AppWarrior-based application (Hotline client/server/tracker) and every AppWarrior module
+needs. Shipping it in the framework keeps builds dependency-free, gives the whole project one test
+vocabulary, and is deliberately replaceable — nothing outside it depends on its internals.
+
+**API:** namespace `appwarrior::test` holds `Case`/`registry()`/`Registrar`, `CheckFailed`,
+`check_failed()`, `fail()`, `to_hex()`, `bytes_from_hex()`, `require_bytes()` and `run_all_tests()`
+(returns 0/1, the body of every test executable's `main()`). Only the registration macros are
+`AW_`-prefixed — `AW_TEST_CASE`, `AW_CHECK`, `AW_FAIL`, `AW_REQUIRE_BYTES`,
+`AW_REQUIRE_BYTES_MSG` — because macros cannot be namespaced (the one justified prefix per
+AGENTS.md).
+
+**Changes:** protocol tests migrated to the new API (`#include "appwarrior/testing.h"`,
+`using namespace appwarrior::test`); `tests/support/` removed; `tests/test_main.cpp` is now a
+two-line `main()` calling `run_all_tests()`. Verification: 39/39 pass on the gcc, clang and
+ASan/UBSan presets.
+
 ### Recommended next phase
 
 **Phase 2 — AppWarrior Core foundation.** Per AGENTS.md the framework is preserved and modernized,
 so the next dependency block is its core: the `appwarrior` library skeleton (core module), the
 typed-integer/`typedefs.h` replacement, and the container layer (`CPtrList`/`CLinkedList`/
 `CBoolArray`/`UIDVarArray`/`CPtrTree` verdicts from `audit/01`) reimplemented or replaced per the
-per-container analysis, each with behavioral tests. That unblocks server/client modernization
-(which are AppWarrior apps) without touching any platform UI backend. Phase 3 then returns to pure
-protocol: payload structs (`SMyFileInfo`, `SMyUserInfo`, `SMyUserAccess`, dates, GUID) and the
+per-container analysis, each with behavioral tests — using the framework's own
+`appwarrior::testing` component. That unblocks server/client modernization (which are AppWarrior
+apps) without touching any platform UI backend. Phase 3 then returns to pure protocol:
+payload structs (`SMyFileInfo`, `SMyUserInfo`, `SMyUserAccess`, dates, GUID) and the
 legacy auth codecs with golden vectors.

@@ -971,4 +971,6 @@ documentation updated):
   and server) are authoritative; Appendix B and `audit/06` have been corrected.
 
 **Implementation status:** Phase 1 of the implementation (build foundation + `hotline::protocol`
-wire codec with golden-vector tests) is complete — see `docs/modernization-ledger.md`.
+wire codec with golden-vector tests) is complete, and the first modern AppWarrior component —
+`appwarrior::testing`, the framework's built-in unit-test facility — has since landed. See
+`docs/modernization-ledger.md`.
