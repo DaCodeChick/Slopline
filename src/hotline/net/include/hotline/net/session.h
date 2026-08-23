@@ -35,6 +35,12 @@
 #include "hotline/protocol/field_list.h"
 #include "hotline/protocol/payload.h"
 
+#if !defined(HOTLINE_BUILD_SERVER)
+#define HOTLINE_BUILD_SERVER 0
+#endif
+
+#if HOTLINE_BUILD_SERVER
+
 namespace hotline::net {
 
 using protocol::AccessMask;
@@ -89,3 +95,5 @@ class Session {
 };
 
 }  // namespace hotline::net
+
+#endif  // HOTLINE_BUILD_SERVER

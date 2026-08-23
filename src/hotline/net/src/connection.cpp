@@ -92,8 +92,11 @@ class ConnectionBase {
   std::deque<PendingSend> send_queue_;
 };
 
-// Client-role core: the only entry point is start(...) with the client
-// handshake parameters.
+// ---------------------------------------------------------------------------
+// Client-role core
+// ---------------------------------------------------------------------------
+
+#if HOTLINE_BUILD_CLIENT
 class ClientCore final : public ConnectionBase {
  public:
   ClientCore(ConnectionConfig config, ConnectionEvents events)
@@ -107,9 +110,13 @@ class ClientCore final : public ConnectionBase {
  private:
   void handle_handshake() override;
 };
+#endif  // HOTLINE_BUILD_CLIENT
 
-// Server-role core: the only entry point is start(socket); exposes the
-// remote version tags of the peer.
+// ---------------------------------------------------------------------------
+// Server-role core
+// ---------------------------------------------------------------------------
+
+#if HOTLINE_BUILD_SERVER
 class ServerCore final : public ConnectionBase {
  public:
   ServerCore(ConnectionConfig config, ConnectionEvents events)
@@ -128,6 +135,7 @@ class ServerCore final : public ConnectionBase {
   std::uint32_t remote_sub_protocol_ = 0;
   std::uint16_t remote_version_ = 0;
 };
+#endif  // HOTLINE_BUILD_SERVER
 
 // ---------------------------------------------------------------------------
 
@@ -361,10 +369,7 @@ void ConnectionBase::flush_sends() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Client-role core
-// ---------------------------------------------------------------------------
-
+#if HOTLINE_BUILD_CLIENT
 void ClientCore::start(aw::net::Socket socket, std::uint32_t sub_protocol,
                        std::uint16_t sub_version) {
   socket_ = std::move(socket);
@@ -396,11 +401,9 @@ void ClientCore::handle_handshake() {
   }
   mark_established();
 }
+#endif  // HOTLINE_BUILD_CLIENT
 
-// ---------------------------------------------------------------------------
-// Server-role core
-// ---------------------------------------------------------------------------
-
+#if HOTLINE_BUILD_SERVER
 void ServerCore::start(aw::net::Socket socket) {
   socket_ = std::move(socket);
   state_ = ConnectionState::awaiting_handshake;
@@ -451,13 +454,11 @@ void ServerCore::handle_handshake() {
   mark_established();
   flush_sends();
 }
+#endif  // HOTLINE_BUILD_SERVER
 
 }  // namespace detail
 
-// ---------------------------------------------------------------------------
-// Role-specific public classes (thin wrappers over the role-specific cores)
-// ---------------------------------------------------------------------------
-
+#if HOTLINE_BUILD_CLIENT
 ClientConnection::ClientConnection(ConnectionConfig config, ConnectionEvents events)
     : core_(std::make_unique<detail::ClientCore>(std::move(config), std::move(events))) {}
 ClientConnection::~ClientConnection() = default;
@@ -487,6 +488,9 @@ void ClientConnection::set_crypto(ConnectionCryptoHooks hooks) {
 }
 void ClientConnection::close() noexcept { core_->close(); }
 
+#endif  // HOTLINE_BUILD_CLIENT
+
+#if HOTLINE_BUILD_SERVER
 ServerConnection::ServerConnection(ConnectionConfig config, ConnectionEvents events)
     : core_(std::make_unique<detail::ServerCore>(std::move(config), std::move(events))) {}
 ServerConnection::~ServerConnection() = default;
@@ -518,5 +522,7 @@ void ServerConnection::set_crypto(ConnectionCryptoHooks hooks) {
   core_->set_crypto(std::move(hooks));
 }
 void ServerConnection::close() noexcept { core_->close(); }
+
+#endif  // HOTLINE_BUILD_SERVER
 
 }  // namespace hotline::net

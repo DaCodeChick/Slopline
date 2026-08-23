@@ -17,5 +17,18 @@ target_include_directories(hotline_net PUBLIC
 target_compile_features(hotline_net PUBLIC cxx_std_23)
 target_link_libraries(hotline_net PUBLIC hotline::protocol appwarrior::framework)
 
+# Publish the component switches so headers and consumers can gate
+# role-specific code at compile time.
+if(BUILD_CLIENT)
+  target_compile_definitions(hotline_net PUBLIC HOTLINE_BUILD_CLIENT=1)
+else()
+  target_compile_definitions(hotline_net PUBLIC HOTLINE_BUILD_CLIENT=0)
+endif()
+if(BUILD_SERVER)
+  target_compile_definitions(hotline_net PUBLIC HOTLINE_BUILD_SERVER=1)
+else()
+  target_compile_definitions(hotline_net PUBLIC HOTLINE_BUILD_SERVER=0)
+endif()
+
 hotline_enable_warnings(hotline_net)
 hotline_enable_sanitizers(hotline_net)

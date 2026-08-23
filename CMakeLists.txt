@@ -21,6 +21,14 @@ option(HOTLINE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(HOTLINE_BUILD_TESTS "Build Hotline tests" ON)
 option(HOTLINE_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
 
+# Hotline application components. Each gates the code of the respective
+# component (connection role cores, session, and the future application
+# libraries) behind compile-time switches — a server-only build carries no
+# client code and vice versa.
+option(BUILD_CLIENT "Build the Hotline client component" ON)
+option(BUILD_SERVER "Build the Hotline server component" ON)
+option(BUILD_TRACKER "Build the Hotline tracker component (future application; the tracker wire codecs are always available)" ON)
+
 # AppWarrior library shape — two independent axes:
 #   BUILD_SHARED_LIBS   shared (ON) vs static (OFF) — governs the AppWarrior
 #                       libraries (they are declared without a fixed type).

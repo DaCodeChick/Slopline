@@ -23,6 +23,18 @@ using namespace hotline::protocol;
 using namespace aw::net;
 using namespace aw::test;
 
+#if !defined(HOTLINE_BUILD_CLIENT)
+#define HOTLINE_BUILD_CLIENT 0
+#endif
+#if !defined(HOTLINE_BUILD_SERVER)
+#define HOTLINE_BUILD_SERVER 0
+#endif
+
+// ---------------------------------------------------------------------------
+// Tests that need BOTH roles (client and server ends of one connection).
+// ---------------------------------------------------------------------------
+#if HOTLINE_BUILD_CLIENT && HOTLINE_BUILD_SERVER
+
 namespace {
 
 // Drives both ends of a connection until `done` returns true or the
@@ -59,34 +71,6 @@ auto drive(ClientConnection& a, ServerConnection& b, Poller& poller, Done done,
   }
 }
 
-// Pumps one connection and one raw socket (no Connection wrapper) until
-// `done` returns true or the timeout expires.
-template <typename Done>
-auto pump(ServerConnection& connection, Socket& raw, Poller& poller, Done done,
-          std::chrono::milliseconds timeout = std::chrono::milliseconds{5000}) -> bool {
-  const auto deadline = std::chrono::steady_clock::now() + timeout;
-  for (;;) {
-    if (done()) {
-      return true;
-    }
-    if (std::chrono::steady_clock::now() >= deadline) {
-      return false;
-    }
-    const auto events = poller.wait(std::chrono::milliseconds{50});
-    if (!events.has_value()) {
-      continue;
-    }
-    for (const PollEvent& event : *events) {
-      if (event.descriptor == connection.descriptor()) {
-        connection.service_readable();
-        connection.service_writable();
-      }
-      (void)raw;
-      (void)event;
-    }
-  }
-}
-
 auto make_pair_of_connections(ConnectionEvents& client_events, ConnectionEvents& server_events)
     -> std::pair<std::unique_ptr<ClientConnection>, std::unique_ptr<ServerConnection>> {
   auto pair = make_socket_pair();
@@ -96,17 +80,6 @@ auto make_pair_of_connections(ConnectionEvents& client_events, ConnectionEvents&
   client->start(std::move(pair->first));
   server->start(std::move(pair->second));
   return {std::move(client), std::move(server)};
-}
-
-// Sends a raw client handshake over an unwrapped socket.
-void send_raw_handshake(Socket& raw, std::uint16_t version = kProtocolVersion,
-                        std::uint32_t protocol = kProtocolTrTp) {
-  ClientHandshake handshake;
-  handshake.protocol = protocol;
-  handshake.version = version;
-  std::array<std::byte, kClientHandshakeSize> bytes{};
-  encode_client_handshake(handshake, bytes);
-  AW_CHECK(raw.send(bytes).has_value());
 }
 
 }  // namespace
@@ -150,24 +123,6 @@ AW_TEST_CASE("establish: HTXF transfer handshake carries subVersion 3") {
   AW_CHECK(drive(client, server, poller, [&] { return server_established; }));
   AW_CHECK(server.remote_sub_protocol() == kSubProtocolHtxf);
   AW_CHECK(server.remote_version() == kTransferSubVersion);
-}
-
-AW_TEST_CASE("establish: legacy NICK handshake alias is accepted") {
-  auto pair = make_socket_pair();
-  AW_CHECK(pair.has_value());
-  bool server_established = false;
-  ConnectionEvents server_events;
-  server_events.on_established = [&] { server_established = true; };
-  ServerConnection server(ConnectionConfig{}, server_events);
-  server.start(std::move(pair->second));
-  Socket& raw = pair->first;
-
-  send_raw_handshake(raw, kProtocolVersion, kProtocolNick);
-
-  Poller poller;
-  poller.add(server.descriptor(), PollInterest::read_write);
-  AW_CHECK(pump(server, raw, poller, [&] { return server_established; }));
-  AW_CHECK(server.state() == ConnectionState::established);
 }
 
 AW_TEST_CASE("transaction round-trip: client request, server reply") {
@@ -233,6 +188,135 @@ AW_TEST_CASE("keepalive carries the historical 2-byte empty field list") {
   AW_CHECK(drive(*client, *server, poller, [&] { return server_got; }));
   AW_CHECK(keepalive.header.type == TransactionType::KeepConnectionAlive);
   AW_REQUIRE_BYTES(keepalive.data, "00 00");
+}
+
+AW_TEST_CASE("encrypted transactions round-trip through TransactionCipher hooks") {
+  const std::vector<std::byte> session_key = bytes_from_hex("01 02 03 04 05 06 07 08");
+  const std::vector<std::byte> password = bytes_from_ascii("secret");
+
+  using Cipher = hotline::protocol::auth::TransactionCipher<aw::crypto::Sha1>;
+
+  ConnectionCryptoHooks client_crypto;
+  ConnectionCryptoHooks server_crypto;
+  {
+    const auto cipher = std::make_shared<Cipher>(password, session_key, true);
+    client_crypto.choose_flag = [] { return 5; };
+    client_crypto.encode = [cipher](std::span<std::byte, 20> header, std::span<std::byte> data,
+                                    std::uint8_t flag) { cipher->encode(header, data, flag); };
+    client_crypto.decode_header = [cipher](std::span<std::byte, 20> header) {
+      return cipher->decode_header(header);
+    };
+    client_crypto.decode_data = [cipher](std::span<std::byte> data, std::uint8_t flag) {
+      cipher->decode_data(data, flag);
+    };
+  }
+  {
+    const auto cipher = std::make_shared<Cipher>(password, session_key, false);
+    server_crypto.choose_flag = [] { return 0; };
+    server_crypto.encode = [cipher](std::span<std::byte, 20> header, std::span<std::byte> data,
+                                    std::uint8_t flag) { cipher->encode(header, data, flag); };
+    server_crypto.decode_header = [cipher](std::span<std::byte, 20> header) {
+      return cipher->decode_header(header);
+    };
+    server_crypto.decode_data = [cipher](std::span<std::byte> data, std::uint8_t flag) {
+      cipher->decode_data(data, flag);
+    };
+  }
+
+  bool established = false;
+  ConnectionEvents client_events;
+  client_events.on_established = [&] { established = true; };
+  ConnectionEvents server_events;
+  ReceivedTransaction received;
+  bool server_got = false;
+  server_events.on_transaction = [&](const ReceivedTransaction& transaction) {
+    server_got = true;
+    received = transaction;
+  };
+
+  auto [client, server] = make_pair_of_connections(client_events, server_events);
+  client->set_crypto(std::move(client_crypto));
+  server->set_crypto(std::move(server_crypto));
+
+  Poller poller;
+  poller.add(client->descriptor(), PollInterest::read_write);
+  poller.add(server->descriptor(), PollInterest::read_write);
+  AW_CHECK(drive(*client, *server, poller, [&] { return established; }));
+
+  const std::vector<std::byte> payload = bytes_from_ascii("secret message");
+  client->queue_transaction(TransactionType::ChatSend, 9, payload);
+  AW_CHECK(drive(*client, *server, poller, [&] { return server_got; }));
+  AW_CHECK(received.header.type == TransactionType::ChatSend);
+  AW_CHECK(received.header.flag == 5);
+  AW_REQUIRE_BYTES(received.data, "73 65 63 72 65 74 20 6d 65 73 73 61 67 65");
+}
+
+#endif  // HOTLINE_BUILD_CLIENT && HOTLINE_BUILD_SERVER
+
+// ---------------------------------------------------------------------------
+// Server-role tests: a ServerConnection driven against a raw peer socket.
+// ---------------------------------------------------------------------------
+#if HOTLINE_BUILD_SERVER
+
+namespace {
+
+// Pumps one connection and one raw socket (no Connection wrapper) until
+// `done` returns true or the timeout expires.
+template <typename Connection, typename Done>
+auto pump(Connection& connection, Socket& raw, Poller& poller, Done done,
+          std::chrono::milliseconds timeout = std::chrono::milliseconds{5000}) -> bool {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  for (;;) {
+    if (done()) {
+      return true;
+    }
+    if (std::chrono::steady_clock::now() >= deadline) {
+      return false;
+    }
+    const auto events = poller.wait(std::chrono::milliseconds{50});
+    if (!events.has_value()) {
+      continue;
+    }
+    for (const PollEvent& event : *events) {
+      if (event.descriptor == connection.descriptor()) {
+        connection.service_readable();
+        connection.service_writable();
+      }
+      (void)raw;
+      (void)event;
+    }
+  }
+}
+
+// Sends a raw client handshake over an unwrapped socket.
+void send_raw_handshake(Socket& raw, std::uint16_t version = kProtocolVersion,
+                        std::uint32_t protocol = kProtocolTrTp) {
+  ClientHandshake handshake;
+  handshake.protocol = protocol;
+  handshake.version = version;
+  std::array<std::byte, kClientHandshakeSize> bytes{};
+  encode_client_handshake(handshake, bytes);
+  AW_CHECK(raw.send(bytes).has_value());
+}
+
+}  // namespace
+
+AW_TEST_CASE("establish: legacy NICK handshake alias is accepted") {
+  auto pair = make_socket_pair();
+  AW_CHECK(pair.has_value());
+  bool server_established = false;
+  ConnectionEvents server_events;
+  server_events.on_established = [&] { server_established = true; };
+  ServerConnection server(ConnectionConfig{}, server_events);
+  server.start(std::move(pair->second));
+  Socket& raw = pair->first;
+
+  send_raw_handshake(raw, kProtocolVersion, kProtocolNick);
+
+  Poller poller;
+  poller.add(server.descriptor(), PollInterest::read_write);
+  AW_CHECK(pump(server, raw, poller, [&] { return server_established; }));
+  AW_CHECK(server.state() == ConnectionState::established);
 }
 
 AW_TEST_CASE("multi-part transactions reassemble by (isReply, id)") {
@@ -378,63 +462,65 @@ AW_TEST_CASE("incompatible handshake version is rejected with reason 1") {
   AW_REQUIRE_BYTES(reply, "54 52 54 50 00 00 00 01");
 }
 
-AW_TEST_CASE("encrypted transactions round-trip through TransactionCipher hooks") {
-  const std::vector<std::byte> session_key = bytes_from_hex("01 02 03 04 05 06 07 08");
-  const std::vector<std::byte> password = bytes_from_ascii("secret");
+#endif  // HOTLINE_BUILD_SERVER
 
-  using Cipher = hotline::protocol::auth::TransactionCipher<aw::crypto::Sha1>;
+// ---------------------------------------------------------------------------
+// Client-role tests: a ClientConnection driven against a raw peer socket.
+// ---------------------------------------------------------------------------
+#if HOTLINE_BUILD_CLIENT
 
-  ConnectionCryptoHooks client_crypto;
-  ConnectionCryptoHooks server_crypto;
-  {
-    const auto cipher = std::make_shared<Cipher>(password, session_key, true);
-    client_crypto.choose_flag = [] { return 5; };
-    client_crypto.encode = [cipher](std::span<std::byte, 20> header, std::span<std::byte> data,
-                                    std::uint8_t flag) { cipher->encode(header, data, flag); };
-    client_crypto.decode_header = [cipher](std::span<std::byte, 20> header) {
-      return cipher->decode_header(header);
-    };
-    client_crypto.decode_data = [cipher](std::span<std::byte> data, std::uint8_t flag) {
-      cipher->decode_data(data, flag);
-    };
-  }
-  {
-    const auto cipher = std::make_shared<Cipher>(password, session_key, false);
-    server_crypto.choose_flag = [] { return 0; };
-    server_crypto.encode = [cipher](std::span<std::byte, 20> header, std::span<std::byte> data,
-                                    std::uint8_t flag) { cipher->encode(header, data, flag); };
-    server_crypto.decode_header = [cipher](std::span<std::byte, 20> header) {
-      return cipher->decode_header(header);
-    };
-    server_crypto.decode_data = [cipher](std::span<std::byte> data, std::uint8_t flag) {
-      cipher->decode_data(data, flag);
-    };
-  }
-
-  bool established = false;
+AW_TEST_CASE("establish: client completes handshake against a raw peer") {
+  auto pair = make_socket_pair();
+  AW_CHECK(pair.has_value());
+  bool client_established = false;
   ConnectionEvents client_events;
-  client_events.on_established = [&] { established = true; };
-  ConnectionEvents server_events;
-  ReceivedTransaction received;
-  bool server_got = false;
-  server_events.on_transaction = [&](const ReceivedTransaction& transaction) {
-    server_got = true;
-    received = transaction;
-  };
-
-  auto [client, server] = make_pair_of_connections(client_events, server_events);
-  client->set_crypto(std::move(client_crypto));
-  server->set_crypto(std::move(server_crypto));
+  client_events.on_established = [&] { client_established = true; };
+  ClientConnection client(ConnectionConfig{}, client_events);
+  client.start(std::move(pair->first));
+  Socket& raw = pair->second;
 
   Poller poller;
-  poller.add(client->descriptor(), PollInterest::read_write);
-  poller.add(server->descriptor(), PollInterest::read_write);
-  AW_CHECK(drive(*client, *server, poller, [&] { return established; }));
+  poller.add(raw.descriptor(), PollInterest::read_write);
+  poller.add(client.descriptor(), PollInterest::read_write);
 
-  const std::vector<std::byte> payload = bytes_from_ascii("secret message");
-  client->queue_transaction(TransactionType::ChatSend, 9, payload);
-  AW_CHECK(drive(*client, *server, poller, [&] { return server_got; }));
-  AW_CHECK(received.header.type == TransactionType::ChatSend);
-  AW_CHECK(received.header.flag == 5);
-  AW_REQUIRE_BYTES(received.data, "73 65 63 72 65 74 20 6d 65 73 73 61 67 65");
+  std::array<std::byte, kClientHandshakeSize> hello{};
+  std::size_t hello_bytes = 0;
+  bool replied = false;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{5000};
+  while ((!client_established || !replied) && std::chrono::steady_clock::now() < deadline) {
+    const auto events = poller.wait(std::chrono::milliseconds{50});
+    if (!events.has_value()) {
+      continue;
+    }
+    for (const PollEvent& event : *events) {
+      if (event.descriptor == client.descriptor() && (event.readable || event.closed)) {
+        client.service_readable();
+      }
+      if (event.descriptor == client.descriptor() && event.writable) {
+        client.service_writable();
+      }
+      if (event.descriptor == raw.descriptor() && event.readable) {
+        const auto received = raw.receive(std::span<std::byte>(hello).subspan(hello_bytes));
+        if (received.has_value()) {
+          hello_bytes += *received;
+          if (hello_bytes == kClientHandshakeSize && !replied) {
+            const auto handshake = decode_client_handshake(hello);
+            AW_CHECK(handshake.protocol == kProtocolTrTp);
+            AW_CHECK(handshake.sub_protocol == kSubProtocolHotl);
+            ServerHandshakeReply reply;
+            reply.error = 0;
+            std::array<std::byte, kServerHandshakeReplySize> reply_bytes{};
+            encode_server_handshake_reply(reply, reply_bytes);
+            AW_CHECK(raw.send(reply_bytes).has_value());
+            replied = true;
+          }
+        }
+      }
+    }
+  }
+  AW_CHECK(replied);
+  AW_CHECK(client_established);
+  AW_CHECK(client.state() == ConnectionState::established);
 }
+
+#endif  // HOTLINE_BUILD_CLIENT

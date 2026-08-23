@@ -1,5 +1,8 @@
 #include "hotline/net/session.h"
 
+#if HOTLINE_BUILD_SERVER
+
+
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -127,3 +130,5 @@ auto Session::login() const noexcept -> const std::string& { return login_; }
 void Session::close() noexcept { state_ = SessionState::closed; }
 
 }  // namespace hotline::net
+
+#endif  // HOTLINE_BUILD_SERVER

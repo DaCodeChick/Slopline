@@ -70,6 +70,28 @@
         "BUILD_MONOLITHIC": "OFF",
         "BUILD_SHARED_LIBS": "OFF"
       }
+    },
+    {
+      "name": "client-only",
+      "displayName": "GCC, client component only (BUILD_CLIENT=ON, BUILD_SERVER=OFF, BUILD_TRACKER=OFF)",
+      "inherits": "gcc",
+      "binaryDir": "${sourceDir}/build/client-only",
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "OFF",
+        "BUILD_TRACKER": "OFF"
+      }
+    },
+    {
+      "name": "server-only",
+      "displayName": "GCC, server component only (BUILD_CLIENT=OFF, BUILD_SERVER=ON, BUILD_TRACKER=OFF)",
+      "inherits": "gcc",
+      "binaryDir": "${sourceDir}/build/server-only",
+      "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "ON",
+        "BUILD_TRACKER": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -100,6 +122,14 @@
     {
       "name": "static-modular",
       "configurePreset": "static-modular"
+    },
+    {
+      "name": "client-only",
+      "configurePreset": "client-only"
+    },
+    {
+      "name": "server-only",
+      "configurePreset": "server-only"
     }
   ],
   "testPresets": [
@@ -148,6 +178,20 @@
     {
       "name": "static-modular",
       "configurePreset": "static-modular",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "client-only",
+      "configurePreset": "client-only",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "server-only",
+      "configurePreset": "server-only",
       "output": {
         "outputOnFailure": true
       }

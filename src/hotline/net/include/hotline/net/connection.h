@@ -37,6 +37,15 @@
 #include "hotline/protocol/constants.h"
 #include "hotline/protocol/transaction.h"
 
+// Component switches (defined by the build; see CMake options
+// BUILD_CLIENT / BUILD_SERVER).
+#if !defined(HOTLINE_BUILD_CLIENT)
+#define HOTLINE_BUILD_CLIENT 0
+#endif
+#if !defined(HOTLINE_BUILD_SERVER)
+#define HOTLINE_BUILD_SERVER 0
+#endif
+
 namespace hotline::net {
 
 using protocol::TransactionHeader;
@@ -86,11 +95,16 @@ struct ConnectionCryptoHooks {
 };
 
 namespace detail {
+#if HOTLINE_BUILD_CLIENT
 class ClientCore;
+#endif
+#if HOTLINE_BUILD_SERVER
 class ServerCore;
+#endif
 }  // namespace detail
 
 // Client-side connection (the Hotline client's entry point).
+#if HOTLINE_BUILD_CLIENT
 class ClientConnection {
  public:
   ClientConnection(ConnectionConfig config = {}, ConnectionEvents events = {});
@@ -122,8 +136,10 @@ class ClientConnection {
  private:
   std::unique_ptr<detail::ClientCore> core_;
 };
+#endif  // HOTLINE_BUILD_CLIENT
 
 // Server-side connection (the Hotline server's entry point).
+#if HOTLINE_BUILD_SERVER
 class ServerConnection {
  public:
   ServerConnection(ConnectionConfig config = {}, ConnectionEvents events = {});
@@ -157,5 +173,6 @@ class ServerConnection {
  private:
   std::unique_ptr<detail::ServerCore> core_;
 };
+#endif  // HOTLINE_BUILD_SERVER
 
 }  // namespace hotline::net

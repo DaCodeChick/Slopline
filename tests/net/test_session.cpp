@@ -1,5 +1,5 @@
 #include "hotline/net/session.h"
-
+#if HOTLINE_BUILD_SERVER
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -140,3 +140,4 @@ AW_TEST_CASE("non-login transactions are ignored") {
   AW_CHECK(!reply.has_value());
   AW_CHECK(session.state() == SessionState::fresh);
 }
+#endif  // HOTLINE_BUILD_SERVER
