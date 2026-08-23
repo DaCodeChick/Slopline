@@ -20,6 +20,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(HOTLINE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(HOTLINE_BUILD_TESTS "Build Hotline tests" ON)
 option(HOTLINE_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+
+# AppWarrior library shape — two independent axes:
+#   BUILD_SHARED_LIBS   shared (ON) vs static (OFF) — governs the AppWarrior
+#                       libraries (they are declared without a fixed type).
+#   BUILD_MONOLITHIC    one 'appwarrior' library (ON) vs per-component
+#                       targets appwarrior::core/crypto/testing (OFF).
+# All four combinations are supported; consumers always link the aggregate
+# target appwarrior::framework.
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_MONOLITHIC "Build AppWarrior as a single monolithic library" ON)
 

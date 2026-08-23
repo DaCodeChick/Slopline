@@ -1,12 +1,7 @@
-# AppWarrior — lightweight native cross-platform C++23 application framework.
-#
-# Library shape is configurable:
-#   BUILD_MONOLITHIC (default ON)  — one 'appwarrior' library
-#                                    (target appwarrior::appwarrior).
-#   BUILD_MONOLITHIC OFF           — per-component targets
-#                                    (appwarrior::core, appwarrior::crypto,
-#                                     appwarrior::testing).
-#   BUILD_SHARED_LIBS (default ON) — shared library; OFF — static.
+# Library shape — two independent axes, declared at the top level:
+#   BUILD_SHARED_LIBS   shared (ON) vs static (OFF).
+#   BUILD_MONOLITHIC    one 'appwarrior' library (ON) vs per-component
+#                       targets appwarrior::core/crypto/testing (OFF).
 #
 # Consumers link the aggregate target appwarrior::framework, which resolves
 # to the correct set of targets in either mode. Windows DLL exports use the
@@ -15,8 +10,6 @@
 # align/ivar/guid, aw::crypto, aw::test); UI and platform backends join
 # later under their own subdirectories. C++ namespaces use the short prefix
 # `aw`; test macros are AW_-prefixed.
-
-option(BUILD_MONOLITHIC "Build AppWarrior as a single monolithic library" ON)
 
 if(BUILD_MONOLITHIC)
   add_library(appwarrior

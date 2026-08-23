@@ -60,6 +60,16 @@
       "cacheVariables": {
         "BUILD_MONOLITHIC": "OFF"
       }
+    },
+    {
+      "name": "static-modular",
+      "displayName": "GCC, per-component STATIC AppWarrior (BUILD_MONOLITHIC=OFF, BUILD_SHARED_LIBS=OFF)",
+      "inherits": "gcc",
+      "binaryDir": "${sourceDir}/build/static-modular",
+      "cacheVariables": {
+        "BUILD_MONOLITHIC": "OFF",
+        "BUILD_SHARED_LIBS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -86,6 +96,10 @@
     {
       "name": "modular",
       "configurePreset": "modular"
+    },
+    {
+      "name": "static-modular",
+      "configurePreset": "static-modular"
     }
   ],
   "testPresets": [
@@ -127,6 +141,13 @@
     {
       "name": "modular",
       "configurePreset": "modular",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "static-modular",
+      "configurePreset": "static-modular",
       "output": {
         "outputOnFailure": true
       }

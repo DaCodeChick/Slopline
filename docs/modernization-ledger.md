@@ -448,15 +448,25 @@ builder (the reference tree's server never sent one — client-only feature).
 
 ## Phase 4c — Configurable AppWarrior library shape + AW_API exports
 
-AppWarrior's linkage is now fully configurable, per project decision (AGENTS.md amended):
+AppWarrior's linkage is now fully configurable on two independent axes, per project
+decision (AGENTS.md amended):
 
-- **`BUILD_SHARED_LIBS`** (standard CMake option, default ON): shared vs static libraries.
-- **`BUILD_MONOLITHIC`** (default ON): one `appwarrior` library (`appwarrior::appwarrior`);
-  OFF restores the per-component targets (`appwarrior::core`, `appwarrior::crypto`,
+- **`BUILD_SHARED_LIBS`** decides **shared vs static** (default ON = shared).
+- **`BUILD_MONOLITHIC`** decides **monolithic vs modular** (default ON = one `appwarrior`
+  library; OFF = per-component targets `appwarrior::core` / `appwarrior::crypto` /
   `appwarrior::testing`).
 - Consumers always link the aggregate **`appwarrior::framework`** target, which resolves to
   the right set of libraries in either mode — `hotline::protocol` and the tests were switched
   to it, so no consumer code changes across configurations.
+
+All four combinations are built and tested:
+
+| Preset | BUILD_SHARED_LIBS | BUILD_MONOLITHIC | Artifacts |
+|---|---|---|---|
+| default (`gcc`/`clang`/`asan`) | ON | ON | `libappwarrior.so` |
+| `static` | OFF | ON | `libappwarrior.a` |
+| `modular` | ON | OFF | `libappwarrior_core.so` + `libappwarrior_crypto.so` |
+| `static-modular` | OFF | OFF | `libappwarrior_core.a` + `libappwarrior_crypto.a` |
 - **`AW_API`** (`appwarrior/export.h`): `__declspec(dllexport)` while building /
   `__declspec(dllimport)` while consuming on Windows (behind the `AW_BUILDING_LIBRARY`
   definition, set privately on the compiled targets when shared), empty elsewhere. Applied to
@@ -464,10 +474,8 @@ AppWarrior's linkage is now fully configurable, per project decision (AGENTS.md 
   `Blowfish` + `Ofb64`); header-only inline facilities need no export annotation. The blanket
   `WINDOWS_EXPORT_ALL_SYMBOLS` was removed.
 
-**Verification:** new `static` (monolithic, BUILD_SHARED_LIBS=OFF) and `modular`
-(BUILD_MONOLITHIC=OFF, per-component shared) presets; all configurations pass 122/122 —
-gcc (monolith shared), static (monolith static, `libappwarrior.a`), modular
-(`libappwarrior_core.so` + `libappwarrior_crypto.so`), clang, and ASan/UBSan.
+**Verification:** all four combinations plus the compiler/sanitizer presets pass 122/122
+tests, warnings-as-errors clean.
 
 ### Recommended next phase
 

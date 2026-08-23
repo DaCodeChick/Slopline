@@ -1270,14 +1270,15 @@ AppWarrior itself should have sufficiently modular components that non-GUI appli
 
 # AppWarrior Modularity
 
-> **Amended (project decision):** AppWarrior's library shape is **configurable**: by default
-> it ships as **one monolithic SHARED library** (CMake target `appwarrior`, alias
-> `appwarrior::appwarrior`). `BUILD_MONOLITHIC=OFF` builds per-component targets
-> (`appwarrior::core`, `appwarrior::crypto`, `appwarrior::testing`), and the standard
-> `BUILD_SHARED_LIBS=OFF` selects static libraries. Consumers always link the aggregate
-> target **`appwarrior::framework`**, which resolves correctly in either mode. Windows DLL
-> exports use the `AW_API` macro (`appwarrior/export.h` — `__declspec(dllexport/dllimport)`
-> behind `AW_BUILDING_LIBRARY`); no blanket `WINDOWS_EXPORT_ALL_SYMBOLS`.
+> **Amended (project decision):** two independent options control AppWarrior's library
+> shape, on orthogonal axes: **`BUILD_SHARED_LIBS`** decides shared (default ON) vs static,
+> and **`BUILD_MONOLITHIC`** decides one monolithic `appwarrior` library (default ON) vs the
+> per-component targets (`appwarrior::core`, `appwarrior::crypto`, `appwarrior::testing`).
+> All four combinations are supported and tested (presets: default / `static` / `modular` /
+> `static-modular`). Consumers always link the aggregate target **`appwarrior::framework`**,
+> which resolves correctly in every mode. Windows DLL exports use the `AW_API` macro
+> (`appwarrior/export.h` — `__declspec(dllexport/dllimport)` behind `AW_BUILDING_LIBRARY`);
+> no blanket `WINDOWS_EXPORT_ALL_SYMBOLS`.
 
 The *component organization* survives as a source-level structure, not a linkage structure:
 
