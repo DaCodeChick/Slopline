@@ -79,7 +79,7 @@ AW_TEST_CASE("legacy 'NICK' alias is accepted on both sides") {
 
 AW_TEST_CASE("server validation rejects unknown protocol tags") {
   ClientHandshake handshake;
-  handshake.protocol = four_cc('H', 'T', 'R', 'K');
+  handshake.protocol = appwarrior::endian::four_cc('H', 'T', 'R', 'K');
   AW_CHECK(validate_client_handshake(handshake) ==
         ClientHandshakeValidation::not_transaction_client);
 }
@@ -96,7 +96,7 @@ AW_TEST_CASE("client reply validation mirrors the historical GetConnectStatus") 
   AW_CHECK(validate_server_handshake_reply(ok) == ServerHandshakeReplyValidation::accepted);
 
   ServerHandshakeReply unknown_protocol;
-  unknown_protocol.protocol = four_cc('H', 'T', 'R', 'K');
+  unknown_protocol.protocol = appwarrior::endian::four_cc('H', 'T', 'R', 'K');
   AW_CHECK(validate_server_handshake_reply(unknown_protocol) ==
         ServerHandshakeReplyValidation::format_unknown);
 

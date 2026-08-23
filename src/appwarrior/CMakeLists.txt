@@ -4,4 +4,5 @@
 # obsolete internals replaced. Components are independently buildable so a
 # headless Hotline server never pays for the GUI stack.
 
+add_subdirectory(core)
 add_subdirectory(testing)

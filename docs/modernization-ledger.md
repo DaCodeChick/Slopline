@@ -9,6 +9,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 |---|---|---|
 | 1 | Build foundation + `hotline::protocol` wire codec | **Complete** |
 | 1b | AppWarrior `testing` component (framework test facility) | **Complete** |
+| 2a | AppWarrior Core: big-endian helpers (`appwarrior::endian`) | **Complete** |
 | 2 | AppWarrior Core foundation (types, containers, event/application model seams) | Recommended next |
 | 3 | Protocol payloads + legacy auth codecs (scramble, HMAC key schedule, HOPE) | Planned |
 | 4+ | Net/transport, server core, client core, tracker, UI backends | Planned |
@@ -28,12 +29,13 @@ New build foundation:
   Conversion warnings are deliberate: protocol code lives on explicit integer widths.
 - `cmake/Sanitizers.cmake`, `CMakePresets.json` — `gcc`, `clang`, `asan` (ASan+UBSan) presets.
 
-New library `hotline::protocol` (`src/hotline/protocol/`), pure C++23, zero dependencies, no I/O:
+New library `hotline::protocol` (`src/hotline/protocol/`), pure C++23, no I/O; depends only on
+`appwarrior::core` (endian helpers — moved to the framework in Phase 2a):
 
 | Modern | Replaces (legacy, unmodified) |
 |---|---|
 | `constants.h` — `TransactionType : u16`, `FieldId : u16`, `AccessPrivilege : u8`, `UserOption`, `FolderDownloadAction`, tags/sizes | the three anonymous enums in `Apps/Common Files/HotlineClientServerCommon.h` |
-| `endian.h` — byte-shift big-endian `read/write_u16be/u32be`, `four_cc` | `TB()`/`FB()` byte swaps scattered through the tree |
+| `appwarrior::endian` — byte-shift big-endian `read/write_u16be/u32be`, `four_cc` (originally `hotline/protocol/endian.h`; promoted to AppWarrior Core in Phase 2a) | `TB()`/`FB()` byte swaps scattered through the tree |
 | `transaction.h/.cpp` — `TransactionHeader` + `encode_header`/`decode_header`/`try_decode_header`/`encode_transaction` | `STranHdr` + `_TNSendTran` + header receive in `AppWarrior/Source/Hardware/UTransact.cpp:13-24,907-975,983-1047` |
 | `field_list.h/.cpp` — `FieldList`/`Field` + encode/decode + integer/string field helpers | `UFieldData` buffer layout + `AddField`/`AddInteger`/`AddCString`/`AddPString`/`GetInteger`/`GetPString`/`GetCString` in `AppWarrior/Source/Data/UFieldData.cpp` |
 | `handshake.h/.cpp` — `ClientHandshake`/`ServerHandshakeReply` + encode/decode + validation policy | `UTransact::GetConnectStatus` (client) and `ReceiveEstablish`/`AcceptEstablish`/`RejectEstablish` (server) |
@@ -133,11 +135,32 @@ AGENTS.md).
 two-line `main()` calling `run_all_tests()`. Verification: 39/39 pass on the gcc, clang and
 ASan/UBSan presets.
 
-### Recommended next phase
+---
 
-**Phase 2 — AppWarrior Core foundation.** Per AGENTS.md the framework is preserved and modernized,
-so the next dependency block is its core: the `appwarrior` library skeleton (core module), the
-typed-integer/`typedefs.h` replacement, and the container layer (`CPtrList`/`CLinkedList`/
+## Phase 2a — AppWarrior Core: big-endian helpers (`appwarrior::endian`)
+
+Promoted the general-purpose byte-order primitives out of `hotline/protocol/endian.h` into
+AppWarrior Core: `src/appwarrior/core/include/appwarrior/core/endian.h`, namespace
+`appwarrior::endian`, exposed by the new INTERFACE target `appwarrior::core` (the core module's
+first content).
+
+**Why it belongs in the framework** (per AGENTS.md): byte-order handling must be centralized and
+is not Hotline-specific — every AppWarrior binary-format codec (Hotline wire protocol, news
+database, user records, `'AWRZ'`/`'HLNZ'`/`'harc'` resources) needs big-endian reads/writes.
+`four_cc` lives alongside them: it encodes a FourCC tag (`'TRTP'`, `'HOTL'`, `'HTXF'`, ...) as
+the big-endian u32 it appears as on the wire/disk.
+
+**Changes:** `hotline::protocol` now depends on `appwarrior::core` (public link) and calls
+`appwarrior::endian::*` directly — no shims, no re-exports (AGENTS.md: no compatibility theater).
+The old `hotline/protocol/endian.h` is deleted. The endian tests moved to
+`tests/appwarrior/test_endian.cpp` (40th case added: `four_cc` goldens). Verification: 40/40 pass
+on the gcc, clang and ASan/UBSan presets.
+
+## Recommended next phase
+
+**Phase 2 — AppWarrior Core foundation (continues).** Per AGENTS.md the framework is preserved and
+modernized; with `appwarrior::core` (endian) and `appwarrior::testing` landed, the next increments
+are the typed-integer/`typedefs.h` replacement and the container layer (`CPtrList`/`CLinkedList`/
 `CBoolArray`/`UIDVarArray`/`CPtrTree` verdicts from `audit/01`) reimplemented or replaced per the
 per-container analysis, each with behavioral tests — using the framework's own
 `appwarrior::testing` component. That unblocks server/client modernization (which are AppWarrior

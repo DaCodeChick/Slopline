@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "hotline/protocol/endian.h"
+#include "appwarrior/core/endian.h"
 
 namespace hotline::protocol {
 
@@ -18,7 +18,7 @@ auto encode_field_list(const FieldList& list) -> std::vector<std::byte> {
   out.reserve(2 + 4 * list.fields.size());  // count + 4 header bytes per field (exact growth below)
 
   std::array<std::byte, 2> count_bytes{};
-  write_u16be(static_cast<std::uint16_t>(list.fields.size()), count_bytes);
+  appwarrior::endian::write_u16be(static_cast<std::uint16_t>(list.fields.size()), count_bytes);
   out.insert(out.end(), count_bytes.begin(), count_bytes.end());
 
   for (const Field& field : list.fields) {
@@ -28,8 +28,8 @@ auto encode_field_list(const FieldList& list) -> std::vector<std::byte> {
 
     std::array<std::byte, 2> id_bytes{};
     std::array<std::byte, 2> size_bytes{};
-    write_u16be(static_cast<std::uint16_t>(field.id), id_bytes);
-    write_u16be(static_cast<std::uint16_t>(field.data.size()), size_bytes);
+    appwarrior::endian::write_u16be(static_cast<std::uint16_t>(field.id), id_bytes);
+    appwarrior::endian::write_u16be(static_cast<std::uint16_t>(field.data.size()), size_bytes);
     out.insert(out.end(), id_bytes.begin(), id_bytes.end());
     out.insert(out.end(), size_bytes.begin(), size_bytes.end());
     out.insert(out.end(), field.data.begin(), field.data.end());
@@ -45,7 +45,7 @@ auto decode_field_list(std::span<const std::byte> bytes)
   if (bytes.size() < 2) {
     return std::unexpected(DecodeError::truncated);
   }
-  const std::uint16_t count = read_u16be(bytes.first<2>());
+  const std::uint16_t count = appwarrior::endian::read_u16be(bytes.first<2>());
   bytes = bytes.subspan(2);
   list.fields.reserve(count);
 
@@ -53,8 +53,8 @@ auto decode_field_list(std::span<const std::byte> bytes)
     if (bytes.size() < 4) {
       return std::unexpected(DecodeError::truncated);
     }
-    const FieldId id = static_cast<FieldId>(read_u16be(bytes.first<2>()));
-    const std::size_t size = read_u16be(bytes.subspan(2).first<2>());
+    const FieldId id = static_cast<FieldId>(appwarrior::endian::read_u16be(bytes.first<2>()));
+    const std::size_t size = appwarrior::endian::read_u16be(bytes.subspan(2).first<2>());
     bytes = bytes.subspan(4);
 
     if (bytes.size() < size) {
@@ -114,11 +114,11 @@ auto make_integer_field(FieldId id, std::int32_t value) -> Field {
   // values above 65535 always take 4 bytes).
   if (value >= 0 && value <= 0xFFFF) {
     std::array<std::byte, 2> bytes{};
-    write_u16be(static_cast<std::uint16_t>(value), bytes);
+    appwarrior::endian::write_u16be(static_cast<std::uint16_t>(value), bytes);
     field.data.assign(bytes.begin(), bytes.end());
   } else {
     std::array<std::byte, 4> bytes{};
-    write_u32be(static_cast<std::uint32_t>(value), bytes);
+    appwarrior::endian::write_u32be(static_cast<std::uint32_t>(value), bytes);
     field.data.assign(bytes.begin(), bytes.end());
   }
   return field;
@@ -133,9 +133,9 @@ auto decode_integer_field(const Field& field)
       return static_cast<std::int32_t>(std::to_integer<std::uint8_t>(data[0]));
     case 2:
       // Zero-extended 16-bit value (the legacy code widened Uint16 -> Uint32).
-      return static_cast<std::int32_t>(read_u16be(data.first<2>()));
+      return static_cast<std::int32_t>(appwarrior::endian::read_u16be(data.first<2>()));
     case 4:
-      return static_cast<std::int32_t>(read_u32be(data.first<4>()));
+      return static_cast<std::int32_t>(appwarrior::endian::read_u32be(data.first<4>()));
     default:
       return std::unexpected(DecodeError::invalid_integer_field_size);
   }

@@ -1,4 +1,4 @@
-#include "hotline/protocol/endian.h"
+#include "appwarrior/core/endian.h"
 
 #include <array>
 #include <cstddef>
@@ -8,7 +8,7 @@
 
 #include "appwarrior/testing.h"
 
-using namespace hotline::protocol;
+using namespace appwarrior::endian;
 using namespace appwarrior::test;
 
 AW_TEST_CASE("u16/u32 big-endian golden encodings") {
@@ -46,4 +46,15 @@ AW_TEST_CASE("u32 round-trips across boundary values") {
     write_u32be(value, encoded);
     AW_CHECK(read_u32be(encoded) == value);
   }
+}
+
+AW_TEST_CASE("four_cc encodes a tag as a big-endian u32") {
+  AW_CHECK(four_cc('T', 'R', 'T', 'P') == 0x54525450U);
+  AW_CHECK(four_cc('H', 'O', 'T', 'L') == 0x484F544CU);
+  AW_CHECK(four_cc('N', 'I', 'C', 'K') == 0x4E49434BU);
+  AW_CHECK(four_cc('H', 'T', 'X', 'F') == 0x48545846U);
+
+  std::array<std::byte, 4> encoded{};
+  write_u32be(four_cc('T', 'R', 'T', 'P'), encoded);
+  AW_REQUIRE_BYTES(encoded, "54 52 54 50");
 }

@@ -21,7 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "hotline/protocol/endian.h"
+#include "appwarrior/core/endian.h"
 
 namespace hotline::protocol {
 
@@ -29,10 +29,10 @@ namespace hotline::protocol {
 // Protocol / connection tags
 // ---------------------------------------------------------------------------
 
-inline constexpr std::uint32_t kProtocolTrTp = four_cc('T', 'R', 'T', 'P');
-inline constexpr std::uint32_t kProtocolNick = four_cc('N', 'I', 'C', 'K');  // legacy alternate tag
-inline constexpr std::uint32_t kSubProtocolHotl = four_cc('H', 'O', 'T', 'L');
-inline constexpr std::uint32_t kSubProtocolHtxf = four_cc('H', 'T', 'X', 'F');  // transfer channel
+inline constexpr std::uint32_t kProtocolTrTp = appwarrior::endian::four_cc('T', 'R', 'T', 'P');
+inline constexpr std::uint32_t kProtocolNick = appwarrior::endian::four_cc('N', 'I', 'C', 'K');  // legacy alternate tag
+inline constexpr std::uint32_t kSubProtocolHotl = appwarrior::endian::four_cc('H', 'O', 'T', 'L');
+inline constexpr std::uint32_t kSubProtocolHtxf = appwarrior::endian::four_cc('H', 'T', 'X', 'F');  // transfer channel
 
 inline constexpr std::uint16_t kProtocolVersion = 1;
 inline constexpr std::uint16_t kClientSubVersion = 2;      // main connection
