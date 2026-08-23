@@ -12,8 +12,10 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 2a | AppWarrior Core: big-endian helpers (`appwarrior::endian`) | **Complete** |
 | 2 | AppWarrior Core foundation (types, bits/align, IVA1 reader, container verdicts) | **Complete** |
 | 3 | Protocol payloads + legacy auth (digests/HMAC, key schedule, scramble, payload codecs) | **Complete** |
-| 3b | Crypto completion (Blowfish OFB-64, encrypted transactions, HOPE login flow) | Recommended next |
-| 4+ | Net/transport, server core, client core, tracker, UI backends | Planned |
+| 3b | Crypto completion (Blowfish OFB-64, encrypted transactions, HOPE login) | **Complete** |
+| 3c | `aw` namespace + framework/general-purpose promotions | **Complete** |
+| 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | Recommended next |
+| 5+ | Net/transport, server core, client core, UI backends | Planned |
 
 ---
 
@@ -302,9 +304,60 @@ after the restructure (pure rename/promotion; no semantic edits).
 
 ### Recommended next phase
 
-**Phase 3b — Crypto completion.** Finish the protocol-crypto spine: Blowfish OFB-64 (zero IV,
-Eric Young self-test vectors from the legacy `HLBlowfishData.h` tables), the encrypted-transaction
-stream layer with the `flag` key-permutation mechanics (`_TNSendTran`, UTransact.cpp:907-975 —
-0/2/7/13 re-roll, 2-byte old-key prefix), and the full HOPE login exchange codec
-(SessionKey/MacAlg/CipherAlg negotiation, `HMAC(login|password, sessionKey)` digest fields).
-Still pure logic — no networking, no platform backends.
+**Phase 4 — Transfer/archive/tracker codecs.** Remaining pure-logic protocol work: FILP flat-file
+and RFLT resume-data codecs, folder-download item headers + `dlFldrAction_*` protocol, `'harc'`
+archive framing, and the tracker registration/list messages — all per audit/06, still zero
+platform/UI dependencies. Networking (RAII transport, establish/session state machines) follows
+as Phase 5.
+
+---
+
+## Phase 3b — Crypto completion
+
+### Delivered
+
+**`aw::crypto::Blowfish`** (`appwarrior/crypto/blowfish.h/.cpp`):
+
+- Standard Schneier Blowfish core (hex-of-pi tables generated from the legacy
+  `HLBlowfishData.h`; 16-round Feistel; key expansion wrapping key bytes) with independent
+  encode/decode schedules (the login key schedule derives different keys per direction).
+- `Ofb64` stream: 64-bit output feedback, **zero IV**, keystream bytes big-endian from the
+  encrypted feedback block, byte-continuous across calls — exactly `HLBlowfish::OFB64`.
+- Verified against the **complete Eric Young suite extracted from the legacy tree itself**
+  (34 variable-key + 24 variable-length-key ECB vectors — the same suite the legacy
+  `HLBlowfish::SelfTest` ran). OFB chaining verified structurally plus a 16-byte keystream
+  cross-check against OpenSSL for the zero key.
+
+**Oracle finding (recorded):** OpenSSL 3's legacy-provider Blowfish **deviates from the official
+test vectors** (`enc -bf-ecb` fails vectors #2/#33/#34, e.g. key `0123456789abcdef` → `9713e3a4…`
+instead of `24594688…`). It is not a trustworthy Blowfish oracle; the Eric Young suite from the
+legacy tree is authoritative for Hotline compatibility.
+
+**`hotline::protocol::auth::TransactionCipher<H>`** (`transaction_cipher.h`, header-only):
+reproduces `_TNSendTran`/receive crypto mechanics exactly — header always stream-encoded under
+the current key; flag 0 = whole body under current key; flag 1..32 = first **2 bytes** under the
+current key, then `Perm*Key(flag)` and the remainder under the new key; OFB state persists across
+transactions in both directions. `legacy_flag_quirk()` reproduces the historical sender's
+0/2/7/13 re-roll distribution as a deterministic, tested helper.
+
+**`hotline::protocol::auth::hope`** (`hope.h/.cpp`): the HOPE encrypted-login exchange —
+stage-1 request (zero login/password bytes, 12-byte MacAlg list quirk preserved, 11-byte
+CipherAlg list), server algorithm parsing (2-byte prefix + p-string name comparison, legacy
+semantics), `login_digests<H>()` = HMAC(login/password, sessionKey), stage-2 digest login
+(digests + server cipher field echoed + Vers 197), and a compatible server-side stage-2 reply
+builder (the reference tree's server never sent one — client-only feature).
+
+### Deliberate divergence (hardening)
+
+- Legacy receive path with flag ≠ 0 and a 1-byte payload decoded **nothing** (its `s >= 2`
+  guard skipped the old-key decode and `s > 2` skipped the rest — the byte stayed encrypted
+  while the caller treated it as plaintext). The modern codec decodes the single byte under the
+  old key. No valid peer is affected; documented here and in the code.
+
+### Verification
+
+- 17 new test cases (98 total): full Eric Young ECB suite, OFB keystream/continuity/reset/
+  round-trip, flag-quirk deterministics, encrypted-transaction round-trips (all flag classes,
+  both directions, stream continuity across transactions, 1-byte-payload fix), HOPE stage
+  goldens + parse tests + digest goldens from an independent python implementation.
+- gcc, clang, ASan/UBSan presets: 98/98 pass, warnings-as-errors clean.

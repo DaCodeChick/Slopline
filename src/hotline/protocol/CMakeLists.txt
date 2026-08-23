@@ -10,6 +10,7 @@ add_library(hotline_protocol STATIC
   src/field_list.cpp
   src/handshake.cpp
   src/payload.cpp
+  src/hope.cpp
 )
 add_library(hotline::protocol ALIAS hotline_protocol)
 

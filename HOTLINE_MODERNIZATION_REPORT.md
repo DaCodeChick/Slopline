@@ -977,7 +977,7 @@ documentation updated):
 **Implementation status:** Phases 1–3 of the implementation are complete: build foundation +
 `hotline::protocol` wire codec (Phase 1); `appwarrior::testing` (Phase 1b); `appwarrior::core`
 with `endian`/`bits`/`align`/`ivar` and the typedefs.h + container verdicts (Phase 2);
-digests/HMAC/key-schedule plus payload codecs and login scramble (Phase 3); framework namespace
-shortened to `aw` with the general-purpose facilities (crypto primitives, `Guid`,
-`DecodeError`) promoted into AppWarrior (Phase 3c) — 81/81 tests across gcc/clang/ASan-UBSan.
-See `docs/modernization-ledger.md`.
+digests/HMAC/key-schedule plus payload codecs and login scramble (Phase 3); Blowfish OFB-64,
+the encrypted-transaction cipher and the HOPE login codec (Phase 3b); framework namespace `aw`
+with general-purpose promotions (Phase 3c) — 98/98 tests across gcc/clang/ASan-UBSan. See
+`docs/modernization-ledger.md`.

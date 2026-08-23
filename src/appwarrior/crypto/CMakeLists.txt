@@ -8,6 +8,7 @@
 add_library(appwarrior_crypto STATIC
   src/md5.cpp
   src/sha1.cpp
+  src/blowfish.cpp
 )
 add_library(appwarrior::crypto ALIAS appwarrior_crypto)
 
@@ -15,6 +16,7 @@ target_include_directories(appwarrior_crypto PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 target_compile_features(appwarrior_crypto PUBLIC cxx_std_23)
+target_link_libraries(appwarrior_crypto PUBLIC appwarrior::core)
 
 hotline_enable_warnings(appwarrior_crypto)
 hotline_enable_sanitizers(appwarrior_crypto)
