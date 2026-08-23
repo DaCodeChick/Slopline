@@ -1,8 +1,19 @@
-// Hotline server application: login session state machine.
+// Hotline networking: login session state machine.
 //
-// The server-side login/agreement choreography extracted from
-// ProcessTran_Login (HotlineServTrans.cpp:1605-1700, :1886-1900) and
-// ProcessTran_Agreed, using the Phase 3 auth codecs:
+// The login/agreement choreography is BILATERAL — both the Hotline client
+// and server participate, so it lives here in the shared hotline::net
+// layer, not in either application project:
+//
+//  * the client builds and sends the Login transaction (scrambled
+//    login/password, Vers), processes the reply, negotiates the
+//    session cipher (HOPE), and sends the Agreed transaction —
+//    historically CMyLoginTask (HotlineTasks.cpp);
+//  * the server verifies the login and produces the reply —
+//    historically ProcessTran_Login (HotlineServTrans.cpp:1605-1700,
+//    :1886-1900) and ProcessTran_Agreed.
+//
+// The server-side verification half is implemented below, using the
+// Phase 3 auth codecs:
 //
 //  * the login name is unscrambled (bitwise NOT), lowercased (ASCII —
 //    the legacy MakeLowercase is encoding-aware and arrives with the text
@@ -18,8 +29,9 @@
 //  * the Agreed transaction moves the session from awaiting_agreement to
 //    active.
 //
-// The agreement/banner choreography itself belongs to the server core
-// (Phase 6); this unit owns verification and state transitions.
+// The client-driving half (build login body, process the reply, cipher
+// negotiation, send Agreed) lands with the client/server cores (Phase 6);
+// this unit owns verification and state transitions.
 
 #pragma once
 
@@ -35,9 +47,8 @@
 #include "hotline/protocol/field_list.h"
 #include "hotline/protocol/payload.h"
 
-namespace hotline::server {
+namespace hotline::net {
 
-using hotline::net::ReceivedTransaction;
 using protocol::AccessMask;
 using protocol::FieldList;
 
@@ -89,4 +100,4 @@ class Session {
   AccessMask access_;
 };
 
-}  // namespace hotline::server
+}  // namespace hotline::net

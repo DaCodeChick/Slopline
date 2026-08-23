@@ -620,21 +620,29 @@ Per project decision, the role code left `hotline::net` for real application pro
   validate the server's 8-byte reply).
 - **`src/hotline/server` (new application project, `hotline::server`)** —
   `ServerConnection final : ConnectionBase` (accept 'TRTP'/'NICK', reply, record remote
-  sub-protocol/version, reject version != 1 with reason 1) plus the login `Session`
-  state machine (moved from hotline::net; namespace `hotline::server`).
+  sub-protocol/version, reject version != 1 with reason 1).
+- **Correction (same span): the login `Session` is bilateral and stays in
+  `hotline::net`.** The legacy client drives the login/agreement choreography too
+  (`CMyLoginTask`, HotlineTasks.cpp: builds and sends Login, processes the reply,
+  negotiates the session cipher, sends Agreed), so `Session` cannot live in the server
+  application project: it returned to the shared layer (`hotline::net::Session`),
+  available to both projects. The implemented half is the server-side verification
+  (ProcessTran_Login/Agreed); the client-driving half lands with the client/server
+  cores (Phase 6).
 - **Gating is now project-level.** The `HOTLINE_BUILD_CLIENT`/`HOTLINE_BUILD_SERVER`
   preprocessor switches and the pimpl wrapper layer are gone: `BUILD_CLIENT` /
   `BUILD_SERVER` decide which subdirectories CMake adds at all, and the role tests are
   gated in the CMake source lists (`test_client.cpp` with BUILD_CLIENT,
-  `test_server.cpp`+`test_session.cpp` with BUILD_SERVER, `test_both.cpp` with both).
-  A client-only binary contains no server establish path and no login machine, and
-  vice versa — structurally, with no preprocessor involved.
+  `test_server.cpp` with BUILD_SERVER, `test_both.cpp` with both; the shared-layer
+  tests — base + session — always build). A client-only binary contains no server
+  establish path, and vice versa — structurally, with no preprocessor involved.
 
-**Verification:** the net suite is now 4 files; `test_base.cpp` (always built) adds a
+**Verification:** the net suite is now 5 files; `test_base.cpp` (always built) adds a
 test-local 4-byte-"ping" role proving ConnectionBase is subclassable outside the
 application projects and covers the base round-trip, keepalive bytes, receive policy,
-and peer-close signal. 133 + 19 tests pass on gcc, clang, ASan/UBSan, static, modular,
-static-modular; 133 + 4 on client-only; 133 + 13 on server-only.
+and peer-close signal; `test_session.cpp` always builds with the shared session.
+133 + 19 tests pass on gcc, clang, ASan/UBSan, static, modular, static-modular;
+133 + 9 on client-only; 133 + 13 on server-only.
 
 ### Recommended next phase
 

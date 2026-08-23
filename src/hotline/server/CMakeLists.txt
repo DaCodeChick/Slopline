@@ -1,13 +1,13 @@
 # hotline::server — the Hotline server application project.
 #
 # Currently carries the server-side connection (ServerConnection over the
-# role-neutral hotline::net::ConnectionBase) and the login session state
-# machine; the server core, handlers, and executable land here in later
-# phases. Built only when BUILD_SERVER is ON.
+# role-neutral hotline::net::ConnectionBase); the server core, handlers,
+# and executable land here in later phases. The login session state
+# machine is shared with the client and lives in hotline::net. Built only
+# when BUILD_SERVER is ON.
 
 add_library(hotline_server STATIC
   src/connection.cpp
-  src/session.cpp
 )
 add_library(hotline::server ALIAS hotline_server)
 

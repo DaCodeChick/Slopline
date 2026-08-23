@@ -1409,8 +1409,11 @@ tests
 > `BUILD_TRACKER` (all default ON) gate the code of the respective application **project**:
 > the client application project (`hotline::client`) and the server application project
 > (`hotline::server`) are added only when their option is ON, so a client-only build
-> contains no server code and vice versa. The role-neutral connection base
-> (`hotline::net::ConnectionBase`) stays in `hotline::net`, shared by both projects.
+> contains no server code and vice versa. Shared connection-layer code stays in
+> `hotline::net`: the role-neutral connection base (`hotline::net::ConnectionBase`),
+> from which both projects derive their role connection, and the login `Session` state
+> machine — the login/agreement choreography is bilateral (the client drives it, the
+> server verifies), so it belongs to neither application project alone.
 > `BUILD_TRACKER` gates the future tracker application (the tracker WIRE codecs always
 > stay available). Presets `client-only` and `server-only` verify the gated
 > configurations.

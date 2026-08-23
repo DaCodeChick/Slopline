@@ -1,4 +1,4 @@
-#include "hotline/server/session.h"
+#include "hotline/net/session.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,7 +11,6 @@
 #include "hotline/protocol/constants.h"
 #include "hotline/protocol/field_list.h"
 
-using namespace hotline::server;
 using namespace hotline::net;
 using namespace hotline::protocol;
 using namespace aw::test;

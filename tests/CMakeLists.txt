@@ -30,20 +30,22 @@ hotline_enable_sanitizers(hotline_protocol_tests)
 
 add_test(NAME protocol COMMAND hotline_protocol_tests)
 
-# hotline_net_tests covers the connection layer. Sources are gated by the
-# application-component switches: the base machinery tests always build,
-# the client/server role tests build with their component, and the
-# cross-role integration tests need both.
+# hotline_net_tests covers the connection/session layer. Sources are
+# gated by the application-component switches: the shared-layer tests
+# (base machinery + the bilateral login session) always build, the
+# client/server role tests build with their component, and the cross-role
+# integration tests need both.
 add_executable(hotline_net_tests
   test_main.cpp
   net/test_base.cpp
+  net/test_session.cpp
 )
 if(BUILD_CLIENT)
   target_sources(hotline_net_tests PRIVATE net/test_client.cpp)
   target_link_libraries(hotline_net_tests PRIVATE hotline::client)
 endif()
 if(BUILD_SERVER)
-  target_sources(hotline_net_tests PRIVATE net/test_server.cpp net/test_session.cpp)
+  target_sources(hotline_net_tests PRIVATE net/test_server.cpp)
   target_link_libraries(hotline_net_tests PRIVATE hotline::server)
 endif()
 if(BUILD_CLIENT AND BUILD_SERVER)

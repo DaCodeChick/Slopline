@@ -1,7 +1,9 @@
-# hotline::net — the role-neutral Hotline connection base over aw::net.
+# hotline::net — the shared Hotline connection layer over aw::net.
 #
 # Transaction framing + multi-part reassembly, the historical receive
-# policy, encrypted-transaction hooks, and the send queue. The establish
+# policy, encrypted-transaction hooks, the send queue, and the login
+# session state machine (bilateral: the client drives it, the server
+# verifies — shared by both application projects). The establish
 # handshake is role-specific: the client derives ClientConnection from
 # ConnectionBase (hotline::client, built under BUILD_CLIENT) and the
 # server derives ServerConnection (hotline::server, built under
@@ -10,6 +12,7 @@
 
 add_library(hotline_net STATIC
   src/connection.cpp
+  src/session.cpp
 )
 add_library(hotline::net ALIAS hotline_net)
 
