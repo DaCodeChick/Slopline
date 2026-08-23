@@ -212,3 +212,139 @@ AW_TEST_CASE("poller: reports readability, writability, and closure") {
   AW_CHECK(!closed->empty());
   AW_CHECK(closed->front().closed);
 }
+
+// Binds a UDP socket to an ephemeral IPv4 loopback port and returns it
+// with its local address (loopback IPv4 is assumed available).
+auto bind_udp_loopback() -> std::pair<Socket, IpAddress> {
+  auto socket = unwrap(Socket::create_udp(IpAddress::Family::ipv4));
+  AW_CHECK(socket.bind(IpAddress{127, 0, 0, 1, 0}).has_value());
+  auto address = unwrap(socket.local_address());
+  AW_CHECK(address.port() != 0);
+  return {std::move(socket), std::move(address)};
+}
+
+// Waits until the poller reports the descriptor readable (or closed).
+auto wait_for_readable(Poller& poller, NativeSocket descriptor) -> bool {
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{2000};
+  while (std::chrono::steady_clock::now() < deadline) {
+    const auto events = poller.wait(std::chrono::milliseconds{50});
+    if (!events.has_value()) {
+      continue;
+    }
+    for (const PollEvent& event : *events) {
+      if (event.descriptor == descriptor && (event.readable || event.closed)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+AW_TEST_CASE("udp: loopback datagram exchange carries the sender address") {
+  auto [first, first_address] = bind_udp_loopback();
+  auto [second, second_address] = bind_udp_loopback();
+  AW_CHECK(first_address != second_address);
+
+  Poller poller;
+  poller.add(first.descriptor(), PollInterest::read);
+  poller.add(second.descriptor(), PollInterest::read);
+
+  const std::vector<std::byte> payload = bytes_from_ascii("datagram");
+  const auto sent = first.send_to(second_address, payload);
+  AW_CHECK(sent.has_value());
+  AW_CHECK(*sent == payload.size());
+
+  AW_CHECK(wait_for_readable(poller, second.descriptor()));
+  std::vector<std::byte> buffer(64);
+  const auto received = second.receive_from(buffer);
+  AW_CHECK(received.has_value());
+  AW_CHECK(received->bytes_received == payload.size());
+  AW_CHECK(received->from == first_address);
+  AW_REQUIRE_BYTES(std::span<const std::byte>(buffer).first(received->bytes_received),
+                   "64 61 74 61 67 72 61 6d");
+
+  // And back the other way.
+  const auto reply = second.send_to(first_address, payload);
+  AW_CHECK(reply.has_value());
+  AW_CHECK(wait_for_readable(poller, first.descriptor()));
+  const auto received_back = first.receive_from(buffer);
+  AW_CHECK(received_back.has_value());
+  AW_CHECK(received_back->bytes_received == payload.size());
+  AW_CHECK(received_back->from == second_address);
+}
+
+AW_TEST_CASE("udp: zero-length datagram is valid, not connection_closed") {
+  auto [first, first_address] = bind_udp_loopback();
+  auto [second, second_address] = bind_udp_loopback();
+  AW_CHECK(first_address != second_address);
+
+  const auto sent = first.send_to(second_address, {});
+  AW_CHECK(sent.has_value());
+  AW_CHECK(*sent == 0);
+
+  Poller poller;
+  poller.add(second.descriptor(), PollInterest::read);
+  AW_CHECK(wait_for_readable(poller, second.descriptor()));
+  std::vector<std::byte> buffer(8);
+  const auto received = second.receive_from(buffer);
+  AW_CHECK(received.has_value());
+  AW_CHECK(received->bytes_received == 0);
+  AW_CHECK(received->from == first_address);
+}
+
+AW_TEST_CASE("udp: empty queue reports would_block; closed socket is invalid_argument") {
+  auto [socket, address] = bind_udp_loopback();
+  (void)address;
+  std::vector<std::byte> buffer(8);
+  const auto received = socket.receive_from(buffer);
+  AW_CHECK(!received.has_value());
+  AW_CHECK(received.error() == NetError::would_block);
+
+  socket.close();
+  const auto after_close = socket.receive_from(buffer);
+  AW_CHECK(!after_close.has_value());
+  AW_CHECK(after_close.error() == NetError::invalid_argument);
+  const auto send_closed = socket.send_to(IpAddress{127, 0, 0, 1, 9}, buffer);
+  AW_CHECK(!send_closed.has_value());
+  AW_CHECK(send_closed.error() == NetError::invalid_argument);
+}
+
+AW_TEST_CASE("udp: IPv6 loopback exchange (when available)") {
+  auto first_result = Socket::create_udp(IpAddress::Family::ipv6);
+  if (!first_result.has_value()) {
+    return;  // no IPv6 in this environment
+  }
+  auto first = std::move(*first_result);
+  const auto bound_first = first.bind(IpAddress::from_text("[::1]:0").value());
+  if (!bound_first.has_value()) {
+    return;  // no IPv6 loopback in this environment
+  }
+  auto first_address = unwrap(first.local_address());
+
+  auto second_result = Socket::create_udp(IpAddress::Family::ipv6);
+  if (!second_result.has_value()) {
+    return;
+  }
+  auto second = std::move(*second_result);
+  const auto bound_second = second.bind(IpAddress::from_text("[::1]:0").value());
+  if (!bound_second.has_value()) {
+    return;
+  }
+  auto second_address = unwrap(second.local_address());
+  AW_CHECK(first_address.family() == IpAddress::Family::ipv6);
+  AW_CHECK(first_address != second_address);
+
+  Poller poller;
+  poller.add(second.descriptor(), PollInterest::read);
+  const std::vector<std::byte> payload = bytes_from_ascii("v6");
+  const auto sent = first.send_to(second_address, payload);
+  AW_CHECK(sent.has_value());
+  AW_CHECK(wait_for_readable(poller, second.descriptor()));
+  std::vector<std::byte> buffer(16);
+  const auto received = second.receive_from(buffer);
+  AW_CHECK(received.has_value());
+  AW_CHECK(received->bytes_received == payload.size());
+  AW_CHECK(received->from == first_address);
+  AW_REQUIRE_BYTES(std::span<const std::byte>(buffer).first(received->bytes_received),
+                   "76 36");
+}

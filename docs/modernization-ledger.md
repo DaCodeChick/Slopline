@@ -19,6 +19,8 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 4b | Shared-library AppWarrior + exception-free expected-based error handling | **Complete** |
 | 4c | Configurable library shape (BUILD_SHARED_LIBS / BUILD_MONOLITHIC) + AW_API exports | **Complete** |
 | 5 | Networking (aw::net transport, hotline::net connection + login session) | **Complete** |
+| 5a | Networking follow-ups (WinSock, IPv6, AW_API, role-split connections) | **Complete** |
+| 5b | Component gating (BUILD_CLIENT/BUILD_SERVER/BUILD_TRACKER) + UDP transport | **Complete** |
 | 6 | Server core (listeners, dispatch, user/news DBs, agreement/banner) | Recommended next |
 
 
@@ -566,6 +568,38 @@ Four follow-ups per project decision:
 **Verification:** 2 new tests (144 total); IPv6 parse/text round-trips and a v6 loopback
 listener test join the suite; 129 + 15 tests pass on gcc, clang, ASan/UBSan, static, modular,
 and static-modular configurations.
+
+## Phase 5b — Component gating and UDP transport
+
+Two project decisions delivered together:
+
+1. **Component gating (`BUILD_CLIENT` / `BUILD_SERVER` / `BUILD_TRACKER`).** The client
+   and server role code is no longer merely *shaped* differently — it is *compiled*
+   conditionally. `hotline::net` publishes `HOTLINE_BUILD_CLIENT` / `HOTLINE_BUILD_SERVER`
+   as PUBLIC definitions (defaulted to 0 in the headers when undefined):
+   `ClientConnection` + `detail::ClientCore` exist only in client-enabled builds;
+   `ServerConnection` + `detail::ServerCore` + the login `Session` only in server-enabled
+   builds. A client-only binary contains no server start path and no login state machine;
+   a server-only binary contains no client start path. `BUILD_TRACKER` gates the future
+   tracker application; the tracker WIRE codecs remain always-available (they are pure
+   protocol). New presets `client-only` and `server-only` verify both gated
+   configurations; the net test suite is itself role-gated (both-role tests require both
+   switches, plus dedicated client-role and server-role cases), so every configuration
+   compiles and runs a meaningful subset.
+2. **UDP transport in `aw::net`.** `Socket::create_udp(family)` (non-blocking datagram
+   sockets, dual-stack IPv6), `Socket::bind(address)` (port 0 → ephemeral, query via
+   `local_address()`), `Socket::send_to(destination, buffer)`, and
+   `Socket::receive_from(buffer) -> expected<Datagram, NetError>` with
+   `Datagram { bytes_received, from }`. Zero-length datagrams are first-class: they
+   succeed with `bytes_received == 0` and never fold into the stream-only
+   `connection_closed` signal (empty-buffer *arguments* are still `invalid_argument`).
+   WinSock `sendto`/`recvfrom` alongside POSIX (with `MSG_NOSIGNAL`), and
+   `EAFNOSUPPORT` maps to `invalid_argument` on both branches.
+
+**Verification:** 4 new UDP tests (loopback exchange with sender address both ways,
+zero-length datagram, would-block/closed-socket error mapping, IPv6 loopback exchange when
+available) — 133 + 16 tests pass on gcc, clang, ASan/UBSan, static, modular,
+static-modular, client-only, and server-only.
 
 ### Recommended next phase
 

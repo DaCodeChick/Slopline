@@ -1405,6 +1405,15 @@ Hotline tracker
 tests
 ```
 
+> **Amended (project decision):** component gating. `BUILD_CLIENT` / `BUILD_SERVER` /
+> `BUILD_TRACKER` (all default ON) gate the code of the respective component. The
+> client/server role code in `hotline::net` is compiled conditionally
+> (`HOTLINE_BUILD_CLIENT` / `HOTLINE_BUILD_SERVER` PUBLIC definitions from the
+> `hotline::net` target): a client-only build carries no server start path and no login
+> session, and vice versa. `BUILD_TRACKER` gates the future tracker application (the
+> tracker WIRE codecs always stay available). Presets `client-only` and `server-only`
+> verify the gated configurations.
+
 Configure Objective-C++ only for macOS backend implementation that requires it.
 
 Do not force non-macOS builds through Objective-C++.

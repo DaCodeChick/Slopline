@@ -47,6 +47,7 @@ auto from_error(int error) noexcept -> NetError {
     case WSAEADDRINUSE:
       return NetError::address_in_use;
     case WSAEINVAL:
+    case WSAEAFNOSUPPORT:
       return NetError::invalid_argument;
     default:
       return NetError::system;
@@ -109,6 +110,40 @@ auto Socket::create_tcp(IpAddress::Family family) -> std::expected<Socket, NetEr
   return Socket{descriptor};
 }
 
+auto Socket::create_udp(IpAddress::Family family) -> std::expected<Socket, NetError> {
+  wsa_runtime();
+  const int af = family == IpAddress::Family::ipv4 ? AF_INET : AF_INET6;
+  const NativeSocket descriptor = ::socket(af, SOCK_DGRAM, IPPROTO_UDP);
+  if (descriptor == INVALID_SOCKET) {
+    return std::unexpected(from_error(last_error()));
+  }
+  if (!set_non_blocking(descriptor)) {
+    const int error = last_error();
+    ::closesocket(descriptor);
+    return std::unexpected(from_error(error));
+  }
+  // Dual-stack IPv6 datagram sockets receive v4-mapped datagrams.
+  if (af == AF_INET6) {
+    const DWORD disabled = 0;
+    ::setsockopt(descriptor, IPPROTO_IPV6, IPV6_V6ONLY,
+                 reinterpret_cast<const char*>(&disabled), sizeof(disabled));
+  }
+  return Socket{descriptor};
+}
+
+auto Socket::bind(const IpAddress& address) -> std::expected<void, NetError> {
+  if (!is_open()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage bind_address{};
+  int bind_size = 0;
+  to_sockaddr(address, bind_address, bind_size);
+  if (::bind(descriptor_, reinterpret_cast<const sockaddr*>(&bind_address), bind_size) != 0) {
+    return std::unexpected(from_error(last_error()));
+  }
+  return {};
+}
+
 auto Socket::connect(const IpAddress& address) -> std::expected<void, NetError> {
   if (!is_open()) {
     return std::unexpected(NetError::invalid_argument);
@@ -147,6 +182,41 @@ auto Socket::receive(std::span<std::byte> buffer) -> std::expected<std::size_t, 
     return std::unexpected(NetError::connection_closed);
   }
   return static_cast<std::size_t>(read);
+}
+
+auto Socket::send_to(const IpAddress& destination, std::span<const std::byte> buffer)
+    -> std::expected<std::size_t, NetError> {
+  if (!is_open()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage target{};
+  int target_size = 0;
+  to_sockaddr(destination, target, target_size);
+  const int sent = ::sendto(descriptor_, reinterpret_cast<const char*>(buffer.data()),
+                            static_cast<int>(buffer.size()), 0,
+                            reinterpret_cast<const sockaddr*>(&target), target_size);
+  if (sent == SOCKET_ERROR) {
+    return std::unexpected(from_error(last_error()));
+  }
+  return static_cast<std::size_t>(sent);
+}
+
+auto Socket::receive_from(std::span<std::byte> buffer) -> std::expected<Datagram, NetError> {
+  if (!is_open() || buffer.empty()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage source{};
+  std::memset(&source, 0, sizeof(source));
+  int source_size = sizeof(source);
+  const int read = ::recvfrom(descriptor_, reinterpret_cast<char*>(buffer.data()),
+                              static_cast<int>(buffer.size()), 0,
+                              reinterpret_cast<sockaddr*>(&source), &source_size);
+  if (read == SOCKET_ERROR) {
+    return std::unexpected(from_error(last_error()));
+  }
+  // Zero-length datagrams are valid on UDP: report them, don't fold them
+  // into the stream-only connection_closed signal.
+  return Datagram{static_cast<std::size_t>(read), from_sockaddr(source)};
 }
 
 auto Socket::local_address() const -> std::expected<IpAddress, NetError> {
@@ -332,6 +402,7 @@ auto from_error(int error) noexcept -> NetError {
     case EADDRINUSE:
       return NetError::address_in_use;
     case EINVAL:
+    case EAFNOSUPPORT:
       return NetError::invalid_argument;
     default:
       return NetError::system;
@@ -396,6 +467,38 @@ auto Socket::create_tcp(IpAddress::Family family) -> std::expected<Socket, NetEr
   return Socket{descriptor};
 }
 
+auto Socket::create_udp(IpAddress::Family family) -> std::expected<Socket, NetError> {
+  const int af = family == IpAddress::Family::ipv4 ? AF_INET : AF_INET6;
+  const NativeSocket descriptor = ::socket(af, SOCK_DGRAM, 0);
+  if (descriptor < 0) {
+    return std::unexpected(from_error(last_error()));
+  }
+  if (!set_non_blocking(descriptor)) {
+    const int error = last_error();
+    ::close(descriptor);
+    return std::unexpected(from_error(error));
+  }
+  // Dual-stack IPv6 datagram sockets receive v4-mapped datagrams.
+  if (af == AF_INET6) {
+    const int disabled = 0;
+    ::setsockopt(descriptor, IPPROTO_IPV6, IPV6_V6ONLY, &disabled, sizeof(disabled));
+  }
+  return Socket{descriptor};
+}
+
+auto Socket::bind(const IpAddress& address) -> std::expected<void, NetError> {
+  if (!is_open()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage bind_address{};
+  socklen_t bind_size = 0;
+  to_sockaddr(address, bind_address, bind_size);
+  if (::bind(descriptor_, reinterpret_cast<const sockaddr*>(&bind_address), bind_size) < 0) {
+    return std::unexpected(from_error(last_error()));
+  }
+  return {};
+}
+
 auto Socket::connect(const IpAddress& address) -> std::expected<void, NetError> {
   if (!is_open()) {
     return std::unexpected(NetError::invalid_argument);
@@ -432,6 +535,41 @@ auto Socket::receive(std::span<std::byte> buffer) -> std::expected<std::size_t, 
     return std::unexpected(NetError::connection_closed);
   }
   return static_cast<std::size_t>(read);
+}
+
+auto Socket::send_to(const IpAddress& destination, std::span<const std::byte> buffer)
+    -> std::expected<std::size_t, NetError> {
+  if (!is_open()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage target{};
+  socklen_t target_size = 0;
+  to_sockaddr(destination, target, target_size);
+  // MSG_NOSIGNAL: a connected datagram socket may see SIGPIPE on ICMP
+  // errors; our sockets are unconnected, but be safe by construction.
+  const ssize_t sent = ::sendto(descriptor_, buffer.data(), buffer.size(), MSG_NOSIGNAL,
+                                reinterpret_cast<const sockaddr*>(&target), target_size);
+  if (sent < 0) {
+    return std::unexpected(from_error(last_error()));
+  }
+  return static_cast<std::size_t>(sent);
+}
+
+auto Socket::receive_from(std::span<std::byte> buffer) -> std::expected<Datagram, NetError> {
+  if (!is_open() || buffer.empty()) {
+    return std::unexpected(NetError::invalid_argument);
+  }
+  sockaddr_storage source{};
+  std::memset(&source, 0, sizeof(source));
+  socklen_t source_size = sizeof(source);
+  const ssize_t read = ::recvfrom(descriptor_, buffer.data(), buffer.size(), 0,
+                                  reinterpret_cast<sockaddr*>(&source), &source_size);
+  if (read < 0) {
+    return std::unexpected(from_error(last_error()));
+  }
+  // Zero-length datagrams are valid on UDP: report them, don't fold them
+  // into the stream-only connection_closed signal.
+  return Datagram{static_cast<std::size_t>(read), from_sockaddr(source)};
 }
 
 auto Socket::local_address() const -> std::expected<IpAddress, NetError> {

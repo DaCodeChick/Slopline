@@ -27,6 +27,13 @@ using NativeSocket = std::uintptr_t;
 using NativeSocket = int;
 #endif
 
+// One received UDP datagram. Zero-length datagrams are valid on UDP (they
+// are NOT connection_closed — that distinction belongs to streams).
+struct Datagram {
+  std::size_t bytes_received = 0;
+  IpAddress from;
+};
+
 class AW_API Socket {
  public:
   Socket() = default;
@@ -51,6 +58,12 @@ class AW_API Socket {
   [[nodiscard]] static auto create_tcp(IpAddress::Family family)
       -> std::expected<Socket, NetError>;
 
+  // Creates a non-blocking datagram socket for the given address family.
+  // IPv6 sockets are dual-stack: they also receive v4-mapped datagrams.
+  // Bind it with bind(); send and receive with send_to()/receive_from().
+  [[nodiscard]] static auto create_udp(IpAddress::Family family)
+      -> std::expected<Socket, NetError>;
+
   [[nodiscard]] auto descriptor() const noexcept -> NativeSocket { return descriptor_; }
   [[nodiscard]] auto is_open() const noexcept -> bool { return descriptor_ != kInvalid; }
 
@@ -58,11 +71,26 @@ class AW_API Socket {
   // writability, then call connect again to collect the result).
   auto connect(const IpAddress& address) -> std::expected<void, NetError>;
 
+  // Binds the socket to a local address. Port 0 selects an ephemeral port
+  // (query local_address()). Used for UDP sockets and any socket that
+  // needs an explicit local endpoint.
+  auto bind(const IpAddress& address) -> std::expected<void, NetError>;
+
   // Partial sends are normal; the returned value is the byte count written.
   auto send(std::span<const std::byte> buffer) -> std::expected<std::size_t, NetError>;
   // Returns the byte count read; a zero-length read reports
-  // NetError::connection_closed instead.
+  // NetError::connection_closed instead (stream semantics).
   auto receive(std::span<std::byte> buffer) -> std::expected<std::size_t, NetError>;
+
+  // Sends one datagram to `destination`. An empty buffer sends a valid
+  // zero-length datagram (unlike send(), which rejects empty buffers).
+  auto send_to(const IpAddress& destination, std::span<const std::byte> buffer)
+      -> std::expected<std::size_t, NetError>;
+
+  // Receives one datagram; `datagram.from` is the sender's address. A
+  // zero-length datagram succeeds with bytes_received == 0 (UDP has no
+  // stream-close semantics).
+  auto receive_from(std::span<std::byte> buffer) -> std::expected<Datagram, NetError>;
 
   auto local_address() const -> std::expected<IpAddress, NetError>;
   auto remote_address() const -> std::expected<IpAddress, NetError>;

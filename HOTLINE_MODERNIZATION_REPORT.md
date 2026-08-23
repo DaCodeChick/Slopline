@@ -984,5 +984,9 @@ static library (Phase 3d); FILP/RFLT/folder-item/`harc`/tracker codecs (Phase 4)
 as a shared library + fully expected-based (exception-free) production error handling
 (Phase 4b); configurable library shape via BUILD_SHARED_LIBS / BUILD_MONOLITHIC with AW_API
 Windows exports (Phase 4c); aw::net transport + the Hotline connection/session layer
-(Phase 5) — 142 tests across all six build configurations. See
-`docs/modernization-ledger.md`.
+(Phase 5); WinSock conditional compilation, IPv6 transport, AW_API on IpAddress, and the
+structural ClientConnection/ServerConnection role split (Phase 5a); BUILD_CLIENT /
+BUILD_SERVER / BUILD_TRACKER component gating plus UDP transport (`create_udp`/`bind`/
+`send_to`/`receive_from` with zero-length datagram support) (Phase 5b) — 133 + 16 tests
+across eight build configurations including the gated client-only and server-only presets.
+See `docs/modernization-ledger.md`.
