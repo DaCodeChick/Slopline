@@ -85,7 +85,10 @@ struct ConnectionCryptoHooks {
   std::function<void(std::span<std::byte>, std::uint8_t)> decode_data;
 };
 
-class ConnectionCore;
+namespace detail {
+class ClientCore;
+class ServerCore;
+}  // namespace detail
 
 // Client-side connection (the Hotline client's entry point).
 class ClientConnection {
@@ -117,7 +120,7 @@ class ClientConnection {
   void close() noexcept;
 
  private:
-  std::unique_ptr<ConnectionCore> core_;
+  std::unique_ptr<detail::ClientCore> core_;
 };
 
 // Server-side connection (the Hotline server's entry point).
@@ -152,7 +155,7 @@ class ServerConnection {
   void close() noexcept;
 
  private:
-  std::unique_ptr<ConnectionCore> core_;
+  std::unique_ptr<detail::ServerCore> core_;
 };
 
 }  // namespace hotline::net

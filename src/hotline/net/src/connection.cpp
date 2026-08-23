@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <map>
 #include <ranges>
-#include <cstddef>
-#include <cstdint>
 #include <utility>
 
 #include "hotline/protocol/field_list.h"
@@ -16,22 +16,24 @@ namespace hotline::net {
 
 using namespace hotline::protocol;
 
-enum class CoreRole : std::uint8_t { client, server };
+namespace detail {
 
 // The shared state machine behind ClientConnection and ServerConnection.
-class ConnectionCore {
+// The role is baked into the DERIVED classes: ClientCore has only the
+// client entry point, ServerCore only the server entry point — neither
+// role can call the other's.
+class ConnectionBase {
  public:
-  ConnectionCore(CoreRole role, ConnectionConfig config, ConnectionEvents events);
+  ConnectionBase(ConnectionConfig config, ConnectionEvents events)
+      : config_(config), events_(std::move(events)) {}
+  virtual ~ConnectionBase() = default;
 
-  void start_client(aw::net::Socket socket, std::uint32_t sub_protocol,
-                    std::uint16_t sub_version);
-  void start_server(aw::net::Socket socket);
+  ConnectionBase(const ConnectionBase&) = delete;
+  auto operator=(const ConnectionBase&) = delete;
 
   [[nodiscard]] auto state() const noexcept -> ConnectionState;
   [[nodiscard]] auto descriptor() const noexcept -> aw::net::NativeSocket;
   [[nodiscard]] auto is_dead() const noexcept -> bool;
-  [[nodiscard]] auto remote_sub_protocol() const noexcept -> std::uint32_t;
-  [[nodiscard]] auto remote_version() const noexcept -> std::uint16_t;
 
   void service_readable();
   void service_writable();
@@ -43,7 +45,7 @@ class ConnectionCore {
   void set_crypto(ConnectionCryptoHooks hooks);
   void close() noexcept;
 
- private:
+ protected:
   enum class ReceiveStage : std::uint8_t { handshake, header, data };
 
   struct PendingSend {
@@ -61,8 +63,17 @@ class ConnectionCore {
   void parse_inbound();
   void complete_transaction(std::vector<std::byte> data);
   void flush_sends();
+  void mark_established() noexcept {
+    state_ = ConnectionState::established;
+    if (events_.on_established) {
+      events_.on_established();
+    }
+  }
 
-  CoreRole role_;
+  // Consumes exactly expected_bytes_ of inbound_ and advances the
+  // handshake (role-specific; implemented by the derived cores).
+  virtual void handle_handshake() = 0;
+
   ConnectionConfig config_;
   ConnectionEvents events_;
   aw::net::Socket socket_;
@@ -79,84 +90,80 @@ class ConnectionCore {
   std::map<std::pair<std::uint8_t, std::uint32_t>, PartialReceive> partial_;
 
   std::deque<PendingSend> send_queue_;
+};
+
+// Client-role core: the only entry point is start(...) with the client
+// handshake parameters.
+class ClientCore final : public ConnectionBase {
+ public:
+  ClientCore(ConnectionConfig config, ConnectionEvents events)
+      : ConnectionBase(std::move(config), std::move(events)) {
+    expected_bytes_ = kServerHandshakeReplySize;
+  }
+
+  void start(aw::net::Socket socket, std::uint32_t sub_protocol,
+             std::uint16_t sub_version);
+
+ private:
+  void handle_handshake() override;
+};
+
+// Server-role core: the only entry point is start(socket); exposes the
+// remote version tags of the peer.
+class ServerCore final : public ConnectionBase {
+ public:
+  ServerCore(ConnectionConfig config, ConnectionEvents events)
+      : ConnectionBase(std::move(config), std::move(events)) {
+    expected_bytes_ = kClientHandshakeSize;
+  }
+
+  void start(aw::net::Socket socket);
+
+  [[nodiscard]] auto remote_sub_protocol() const noexcept -> std::uint32_t;
+  [[nodiscard]] auto remote_version() const noexcept -> std::uint16_t;
+
+ private:
+  void handle_handshake() override;
 
   std::uint32_t remote_sub_protocol_ = 0;
   std::uint16_t remote_version_ = 0;
 };
 
-ConnectionCore::ConnectionCore(CoreRole role, ConnectionConfig config, ConnectionEvents events)
-    : role_(role), config_(config), events_(std::move(events)) {
-  switch (role_) {
-    case CoreRole::client:
-      receive_stage_ = ReceiveStage::handshake;
-      expected_bytes_ = kServerHandshakeReplySize;
-      break;
-    case CoreRole::server:
-      receive_stage_ = ReceiveStage::handshake;
-      expected_bytes_ = kClientHandshakeSize;
-      break;
-  }
+// ---------------------------------------------------------------------------
+
+auto ConnectionBase::state() const noexcept -> ConnectionState { return state_; }
+
+auto ConnectionBase::descriptor() const noexcept -> aw::net::NativeSocket {
+  return socket_.descriptor();
 }
 
-void ConnectionCore::start_client(aw::net::Socket socket, std::uint32_t sub_protocol,
-                              std::uint16_t sub_version) {
-  socket_ = std::move(socket);
-  state_ = ConnectionState::awaiting_handshake_reply;
+auto ConnectionBase::is_dead() const noexcept -> bool { return state_ == ConnectionState::dead; }
 
-  ClientHandshake handshake;
-  handshake.protocol = kProtocolTrTp;
-  handshake.sub_protocol = sub_protocol;
-  handshake.version = kProtocolVersion;
-  handshake.sub_version = sub_version;
-  std::array<std::byte, kClientHandshakeSize> bytes{};
-  encode_client_handshake(handshake, bytes);
-  queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
-  flush_sends();
-}
+void ConnectionBase::set_crypto(ConnectionCryptoHooks hooks) { crypto_ = std::move(hooks); }
 
-void ConnectionCore::start_server(aw::net::Socket socket) {
-  socket_ = std::move(socket);
-  state_ = ConnectionState::awaiting_handshake;
-}
+void ConnectionBase::close() noexcept { socket_.close(); }
 
-auto ConnectionCore::state() const noexcept -> ConnectionState { return state_; }
-
-auto ConnectionCore::descriptor() const noexcept -> aw::net::NativeSocket { return socket_.descriptor(); }
-
-auto ConnectionCore::is_dead() const noexcept -> bool { return state_ == ConnectionState::dead; }
-
-auto ConnectionCore::remote_sub_protocol() const noexcept -> std::uint32_t {
-  return remote_sub_protocol_;
-}
-
-auto ConnectionCore::remote_version() const noexcept -> std::uint16_t { return remote_version_; }
-
-void ConnectionCore::set_crypto(ConnectionCryptoHooks hooks) { crypto_ = std::move(hooks); }
-
-void ConnectionCore::close() noexcept { socket_.close(); }
-
-void ConnectionCore::queue_bytes(std::vector<std::byte> bytes) {
+void ConnectionBase::queue_bytes(std::vector<std::byte> bytes) {
   if (bytes.empty()) {
     return;
   }
   send_queue_.push_back(PendingSend{std::move(bytes), 0});
 }
 
-void ConnectionCore::mark_dead() noexcept {
+void ConnectionBase::mark_dead() noexcept {
   if (state_ == ConnectionState::dead) {
     return;
   }
-  const bool was_dead = state_ == ConnectionState::dead;
   state_ = ConnectionState::dead;
   socket_.close();
-  if (!was_dead && events_.on_closed) {
+  if (events_.on_closed) {
     events_.on_closed();
   }
 }
 
-void ConnectionCore::queue_transaction(TransactionType type, std::uint32_t id,
-                                   std::span<const std::byte> data, bool is_reply,
-                                   std::uint32_t error) {
+void ConnectionBase::queue_transaction(TransactionType type, std::uint32_t id,
+                                       std::span<const std::byte> data, bool is_reply,
+                                       std::uint32_t error) {
   TransactionHeader header;
   header.is_reply = is_reply ? 1 : 0;
   header.type = type;
@@ -186,7 +193,7 @@ void ConnectionCore::queue_transaction(TransactionType type, std::uint32_t id,
   flush_sends();
 }
 
-void ConnectionCore::queue_keepalive() {
+void ConnectionBase::queue_keepalive() {
   // The historical keepalive: transaction 500 with a 2-byte empty field
   // list body (UFieldData::GetDataHandle creates the 2-byte zero count).
   const FieldList empty;
@@ -196,7 +203,7 @@ void ConnectionCore::queue_keepalive() {
   }
 }
 
-void ConnectionCore::service_readable() {
+void ConnectionBase::service_readable() {
   if (state_ == ConnectionState::dead) {
     return;
   }
@@ -214,19 +221,20 @@ void ConnectionCore::service_readable() {
       mark_dead();
       return;
     }
-    inbound_.insert(inbound_.end(), scratch.begin(), scratch.begin() + static_cast<std::ptrdiff_t>(*received));
+    inbound_.insert(inbound_.end(), scratch.begin(),
+                    scratch.begin() + static_cast<std::ptrdiff_t>(*received));
   }
   parse_inbound();
 }
 
-void ConnectionCore::service_writable() {
+void ConnectionBase::service_writable() {
   if (state_ == ConnectionState::dead) {
     return;
   }
   flush_sends();
 }
 
-void ConnectionCore::parse_inbound() {
+void ConnectionBase::parse_inbound() {
   for (;;) {
     if (state_ == ConnectionState::dead || state_ == ConnectionState::closing) {
       return;
@@ -237,66 +245,7 @@ void ConnectionCore::parse_inbound() {
         if (inbound_.size() < expected_bytes_) {
           return;
         }
-        if (role_ == CoreRole::server) {
-          const auto handshake = try_decode_client_handshake(
-              std::span<const std::byte>(inbound_).first(kClientHandshakeSize));
-          if (!handshake.has_value()) {
-            mark_dead();
-            return;
-          }
-          remote_sub_protocol_ = handshake->sub_protocol;
-          remote_version_ = handshake->sub_version;
-
-          const ClientHandshakeValidation validation = validate_client_handshake(*handshake);
-          if (validation == ClientHandshakeValidation::not_transaction_client) {
-            inbound_.erase(inbound_.begin(),
-                           inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
-            mark_dead();
-            return;
-          }
-          if (validation == ClientHandshakeValidation::incompatible_version) {
-            ServerHandshakeReply reject;
-            reject.error = normalize_reject_reason(1);
-            std::array<std::byte, kServerHandshakeReplySize> bytes{};
-            encode_server_handshake_reply(reject, bytes);
-            queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
-            inbound_.erase(inbound_.begin(),
-                           inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
-            state_ = ConnectionState::closing;
-            flush_sends();
-            return;
-          }
-
-          ServerHandshakeReply accept;
-          std::array<std::byte, kServerHandshakeReplySize> bytes{};
-          encode_server_handshake_reply(accept, bytes);
-          queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
-          inbound_.erase(inbound_.begin(),
-                         inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
-          state_ = ConnectionState::established;
-          flush_sends();
-          if (events_.on_established) {
-            events_.on_established();
-          }
-        } else {
-          const auto reply = try_decode_server_handshake_reply(
-              std::span<const std::byte>(inbound_).first(kServerHandshakeReplySize));
-          if (!reply.has_value()) {
-            mark_dead();
-            return;
-          }
-          inbound_.erase(inbound_.begin(),
-                         inbound_.begin() + static_cast<std::ptrdiff_t>(kServerHandshakeReplySize));
-          if (validate_server_handshake_reply(*reply) !=
-              ServerHandshakeReplyValidation::accepted) {
-            mark_dead();
-            return;
-          }
-          state_ = ConnectionState::established;
-          if (events_.on_established) {
-            events_.on_established();
-          }
-        }
+        handle_handshake();
         receive_stage_ = ReceiveStage::header;
         expected_bytes_ = kTransactionHeaderSize;
         break;
@@ -306,7 +255,8 @@ void ConnectionCore::parse_inbound() {
         if (inbound_.size() < kTransactionHeaderSize) {
           return;
         }
-        std::ranges::copy(inbound_ | std::views::take(kTransactionHeaderSize), header_bytes_.begin());
+        std::ranges::copy(inbound_ | std::views::take(kTransactionHeaderSize),
+                          header_bytes_.begin());
         inbound_.erase(inbound_.begin(),
                        inbound_.begin() + static_cast<std::ptrdiff_t>(kTransactionHeaderSize));
 
@@ -351,7 +301,7 @@ void ConnectionCore::parse_inbound() {
   }
 }
 
-void ConnectionCore::complete_transaction(std::vector<std::byte> data) {
+void ConnectionBase::complete_transaction(std::vector<std::byte> data) {
   if (crypto_.decode_data) {
     // The header was already decoded when it arrived; the data is
     // decoded now, under the flag from the decoded header.
@@ -385,10 +335,11 @@ void ConnectionCore::complete_transaction(std::vector<std::byte> data) {
   }
 }
 
-void ConnectionCore::flush_sends() {
+void ConnectionBase::flush_sends() {
   while (!send_queue_.empty()) {
     PendingSend& pending = send_queue_.front();
-    const auto sent = socket_.send(std::span<const std::byte>(pending.bytes).subspan(pending.offset));
+    const auto sent =
+        socket_.send(std::span<const std::byte>(pending.bytes).subspan(pending.offset));
     if (!sent.has_value()) {
       if (sent.error() == aw::net::NetError::would_block) {
         return;
@@ -411,19 +362,111 @@ void ConnectionCore::flush_sends() {
 }
 
 // ---------------------------------------------------------------------------
-// Role-specific public classes (thin wrappers over the shared core)
+// Client-role core
+// ---------------------------------------------------------------------------
+
+void ClientCore::start(aw::net::Socket socket, std::uint32_t sub_protocol,
+                       std::uint16_t sub_version) {
+  socket_ = std::move(socket);
+  state_ = ConnectionState::awaiting_handshake_reply;
+
+  ClientHandshake handshake;
+  handshake.protocol = kProtocolTrTp;
+  handshake.sub_protocol = sub_protocol;
+  handshake.version = kProtocolVersion;
+  handshake.sub_version = sub_version;
+  std::array<std::byte, kClientHandshakeSize> bytes{};
+  encode_client_handshake(handshake, bytes);
+  queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
+  flush_sends();
+}
+
+void ClientCore::handle_handshake() {
+  const auto reply = try_decode_server_handshake_reply(
+      std::span<const std::byte>(inbound_).first(kServerHandshakeReplySize));
+  if (!reply.has_value()) {
+    mark_dead();
+    return;
+  }
+  inbound_.erase(inbound_.begin(),
+                 inbound_.begin() + static_cast<std::ptrdiff_t>(kServerHandshakeReplySize));
+  if (validate_server_handshake_reply(*reply) != ServerHandshakeReplyValidation::accepted) {
+    mark_dead();
+    return;
+  }
+  mark_established();
+}
+
+// ---------------------------------------------------------------------------
+// Server-role core
+// ---------------------------------------------------------------------------
+
+void ServerCore::start(aw::net::Socket socket) {
+  socket_ = std::move(socket);
+  state_ = ConnectionState::awaiting_handshake;
+}
+
+auto ServerCore::remote_sub_protocol() const noexcept -> std::uint32_t {
+  return remote_sub_protocol_;
+}
+
+auto ServerCore::remote_version() const noexcept -> std::uint16_t { return remote_version_; }
+
+void ServerCore::handle_handshake() {
+  const auto handshake = try_decode_client_handshake(
+      std::span<const std::byte>(inbound_).first(kClientHandshakeSize));
+  if (!handshake.has_value()) {
+    mark_dead();
+    return;
+  }
+  remote_sub_protocol_ = handshake->sub_protocol;
+  remote_version_ = handshake->sub_version;
+
+  const ClientHandshakeValidation validation = validate_client_handshake(*handshake);
+  if (validation == ClientHandshakeValidation::not_transaction_client) {
+    inbound_.erase(inbound_.begin(),
+                   inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
+    mark_dead();
+    return;
+  }
+  if (validation == ClientHandshakeValidation::incompatible_version) {
+    ServerHandshakeReply reject;
+    reject.error = normalize_reject_reason(1);
+    std::array<std::byte, kServerHandshakeReplySize> bytes{};
+    encode_server_handshake_reply(reject, bytes);
+    queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
+    inbound_.erase(inbound_.begin(),
+                   inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
+    state_ = ConnectionState::closing;
+    flush_sends();
+    return;
+  }
+
+  ServerHandshakeReply accept;
+  std::array<std::byte, kServerHandshakeReplySize> bytes{};
+  encode_server_handshake_reply(accept, bytes);
+  queue_bytes(std::vector<std::byte>(bytes.begin(), bytes.end()));
+  inbound_.erase(inbound_.begin(),
+                 inbound_.begin() + static_cast<std::ptrdiff_t>(kClientHandshakeSize));
+  mark_established();
+  flush_sends();
+}
+
+}  // namespace detail
+
+// ---------------------------------------------------------------------------
+// Role-specific public classes (thin wrappers over the role-specific cores)
 // ---------------------------------------------------------------------------
 
 ClientConnection::ClientConnection(ConnectionConfig config, ConnectionEvents events)
-    : core_(std::make_unique<ConnectionCore>(CoreRole::client, std::move(config),
-                                             std::move(events))) {}
+    : core_(std::make_unique<detail::ClientCore>(std::move(config), std::move(events))) {}
 ClientConnection::~ClientConnection() = default;
 ClientConnection::ClientConnection(ClientConnection&&) noexcept = default;
 auto ClientConnection::operator=(ClientConnection&&) noexcept -> ClientConnection& = default;
 
 void ClientConnection::start(aw::net::Socket socket, std::uint32_t sub_protocol,
                              std::uint16_t sub_version) {
-  core_->start_client(std::move(socket), sub_protocol, sub_version);
+  core_->start(std::move(socket), sub_protocol, sub_version);
 }
 
 auto ClientConnection::state() const noexcept -> ConnectionState { return core_->state(); }
@@ -445,13 +488,12 @@ void ClientConnection::set_crypto(ConnectionCryptoHooks hooks) {
 void ClientConnection::close() noexcept { core_->close(); }
 
 ServerConnection::ServerConnection(ConnectionConfig config, ConnectionEvents events)
-    : core_(std::make_unique<ConnectionCore>(CoreRole::server, std::move(config),
-                                             std::move(events))) {}
+    : core_(std::make_unique<detail::ServerCore>(std::move(config), std::move(events))) {}
 ServerConnection::~ServerConnection() = default;
 ServerConnection::ServerConnection(ServerConnection&&) noexcept = default;
 auto ServerConnection::operator=(ServerConnection&&) noexcept -> ServerConnection& = default;
 
-void ServerConnection::start(aw::net::Socket socket) { core_->start_server(std::move(socket)); }
+void ServerConnection::start(aw::net::Socket socket) { core_->start(std::move(socket)); }
 
 auto ServerConnection::state() const noexcept -> ConnectionState { return core_->state(); }
 auto ServerConnection::descriptor() const noexcept -> aw::net::NativeSocket {

@@ -509,7 +509,8 @@ phase behind the same interface):
   the receive policy runs on decoded sizes.
 
 **`hotline::net::Session`** — login/agreement state machine (fresh → awaiting_agreement →
-active), extracted from `ProcessTran_Login`: login unscramble + ASCII lowercase + ''→'-',
+active), extracted from `ProcessTran_Login`: login unscramble + ASCII lowercase + '
+'→'-',
 injected user lookup, password compared exactly as stored (received scrambled bytes vs stored
 scrambled bytes — never unscrambled), success reply (Vers/CommunityBannerID/ServerName), error
 replies with error 1 + ErrorText. The agreement/banner choreography itself lands with the
@@ -555,9 +556,12 @@ Four follow-ups per project decision:
    formats remain IPv4 (tracker octets etc.).
 4. **Role-split connections.** `hotline::net::Connection` was split into
    **`ClientConnection`** (client-only API: `start(socket, sub_protocol, sub_version)`) and
-   **`ServerConnection`** (server-only API: `start(socket)`, remote version getters) over a
-   shared private `ConnectionCore` — the Hotline client links no server entry point and the
-   server links no client entry point.
+   **`ServerConnection`** (server-only API: `start(socket)`, remote version getters). The
+   enforcement is **structural**: a shared `detail::ConnectionBase` carries the framing
+   machinery, while the role-specific `detail::ClientCore` (only a client start) and
+   `detail::ServerCore` (only a server start + remote getters) live behind the public
+   wrappers — there is no class anywhere with both entry points, so the client cannot call
+   the server's start and vice versa, even in principle.
 
 **Verification:** 2 new tests (144 total); IPv6 parse/text round-trips and a v6 loopback
 listener test join the suite; 129 + 15 tests pass on gcc, clang, ASan/UBSan, static, modular,
