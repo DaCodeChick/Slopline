@@ -858,7 +858,11 @@ what was replaced, why, what provides it now, how behavior was verified.
    server implements HOPE for old `mUseCrypt` clients (recommended: yes, using the preserved
    algorithms) and capture reference vectors.
 4. **`SMyUserAccess` endianness** (raw native copy, `HotlineServTrans.cpp:1719`). Normalize in the
-   new codec and verify against real clients; document the historical hazard.
+   new codec and verify against real clients; document the historical hazard. *(Refined during
+   Phase 3 implementation: the legacy SetBit/ClearBit are byte-based, so the wire bytes for a
+   given privilege set are host-independent — the hazard only affects numeric interpretation of
+   the two u32 values. The modern `AccessMask` models the mask as a u64 read big-endian and
+   sidesteps it; see the modernization ledger, Phase 3.)*
 5. **Duplicate field IDs** (112/112, 114/114): preserve the collisions verbatim (existing
    peers depend on them); document prominently; do not "fix" silently. *(Verified during
    Phase 1 implementation: the previously listed "117/117" is NOT a field-ID collision —
@@ -970,7 +974,8 @@ documentation updated):
   comments are arithmetic typos. The compiled hex literals (used identically by the tree's client
   and server) are authoritative; Appendix B and `audit/06` have been corrected.
 
-**Implementation status:** Phases 1–2 of the implementation are complete: build foundation +
+**Implementation status:** Phases 1–3 of the implementation are complete: build foundation +
 `hotline::protocol` wire codec (Phase 1); `appwarrior::testing` (Phase 1b); `appwarrior::core`
-with `appwarrior::endian` (Phase 2a) and `bits`/`align`/`ivar` plus the typedefs.h and container
-verdicts (Phase 2) — 60/60 tests across gcc/clang/ASan-UBSan. See `docs/modernization-ledger.md`.
+with `endian`/`bits`/`align`/`ivar` and the typedefs.h + container verdicts (Phase 2);
+`hotline::crypto` digests/HMAC/key-schedule plus the payload codecs and login scramble (Phase 3) —
+81/81 tests across gcc/clang/ASan-UBSan. See `docs/modernization-ledger.md`.

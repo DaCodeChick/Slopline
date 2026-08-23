@@ -11,7 +11,8 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 1b | AppWarrior `testing` component (framework test facility) | **Complete** |
 | 2a | AppWarrior Core: big-endian helpers (`appwarrior::endian`) | **Complete** |
 | 2 | AppWarrior Core foundation (types, bits/align, IVA1 reader, container verdicts) | **Complete** |
-| 3 | Protocol payloads + legacy auth codecs (scramble, HMAC key schedule, HOPE) | Recommended next |
+| 3 | Protocol payloads + legacy auth (digests/HMAC, key schedule, scramble, payload codecs) | **Complete** |
+| 3b | Crypto completion (Blowfish OFB-64, encrypted transactions, HOPE login flow) | Recommended next |
 | 4+ | Net/transport, server core, client core, tracker, UI backends | Planned |
 
 ---
@@ -217,11 +218,66 @@ lenient about ID ordering, preserves table order, and `find`/`item_data` return 
 - Independent sweep: all 8 real `.dat` catalogs decode (see above).
 - gcc, clang and ASan/UBSan presets: 60/60 pass, warnings-as-errors clean.
 
+## Phase 3 — Protocol payloads + legacy auth
+
+### Delivered
+
+**`hotline::crypto`** (`src/hotline/crypto/`, zero dependencies):
+
+| Modern | Replaces | Verification |
+|---|---|---|
+| `md5.h/.cpp` — `Md5::digest` (RFC 1321, written from the RFC) | `HLMD5` internals | RFC 1321 vectors + block-boundary lengths cross-checked vs python hashlib |
+| `sha1.h/.cpp` — `Sha1::digest` (FIPS 180-1) | `HLSha1` internals | FIPS 180-1 vectors + boundary lengths |
+| `hmac.h` — generic `hmac<Hash>()` (RFC 2104) over a `message_digest` concept | `HLMD5::HMAC_XXX` / `HLSha1::HMAC_XXX` | RFC 2202 vectors, long-key pre-hash path, `HMAC-MD5("","")` (audit/06 §11.1) |
+| `key_schedule.h` — `derive_login_keys<Hash>()` / `permute_key<Hash>()` | `HLCrypt::Init` / `PermEncodeKey` / `PermDecodeKey` (HLCrypt.cpp:16-74) | golden vectors from an independent python implementation (t1, t2, perm3, both hashes; zero-round identity) |
+
+The key schedule reproduces the historical roles exactly: `t1 = HMAC(pw, sk)` twice,
+`t2 = HMAC(pw, t1)`; client enc/dec = t2/t1, server = t1/t2; permute = `key = HMAC(sk, key)`
+× n, in place. Hash choice is compile-time (negotiated at login), hence templates — no
+runtime type erasure.
+
+**`hotline::protocol` payloads** (`payload.h/.cpp`) + **auth** (`auth.h`):
+
+| Codec | Legacy source | Wire form |
+|---|---|---|
+| `FileInfo` | `SMyFileInfo`, written by `BuildFileList` (HotlineServ.cpp:2183-2220) | 20-byte header: type/creator **u32 LE** (legacy-Intel raw host copy — FourCCs appear byte-reversed from Windows peers; Mac peers sent BE), fileSize/nameScript/nameSize **BE**, then name bytes |
+| `UserInfo` | `SMyUserInfo`, `ProcessTran_GetUserNameList` (HotlineServTrans.cpp:1475-1515) | id u16 BE, icon i16 BE, flags u16 BE, nameSize u16 BE, name bytes |
+| `AccessMask` | `SMyUserAccess` raw 8-byte copy (HotlineServTrans.cpp:3262, HotlineTasks.cpp:4988/5119) | 8 bytes; privilege p = byte p/8 bit 7-(p%8) — modeled as a u64 read big-endian, privilege p = bit (63-p) |
+| `DateTimeStamp` | `SDateTimeStamp::Flatten` (UDateTime(W).cpp:136-150) | year u16 BE, msecs u16 BE, seconds u32 BE — **local time, within-year**: seconds since Jan 1 of `year`, msecs within the second |
+| `Guid` | `SGUID` + `UGUID::Flatten` (UGUID(W).cpp:63-75) | time_low BE, time_mid BE, time_hi BE, then 8 raw bytes — the Microsoft UUID network form |
+| `auth::scramble` | login/password bitwise-NOT (HotlineTasks.cpp:1494-1503; HotlineServTrans.cpp:1620-1623) | self-inverse byte NOT; documented server-side lowercase/CR-replacement/password-stays-scrambled behaviors |
+
+### Endianness finding (refines report §24.4)
+
+The `SMyUserAccess` "endianness hazard" is narrower than first reported: the legacy
+`SetBit`/`ClearBit` are byte-based, so **the wire bytes for a given privilege set are
+host-independent** (both legacy Mac and Intel builds emitted identical bytes). The hazard only
+affects code that interpreted the two u32 *values* numerically across hosts. The modern
+`AccessMask` (u64, big-endian byte mapping) sidesteps it entirely. `appwarrior::endian` gained
+`read/write_u32le` (for the verified legacy-Intel `FileInfo` quirk) and `read/write_u64be`
+(for `AccessMask`).
+
+### Verification
+
+- 21 new test cases (81 total): digest RFC vectors, HMAC RFC/oracle vectors, key-schedule
+  oracle goldens, all five payload goldens + truncation/trailing sweeps, access-mask
+  byte-position goldens, scramble round-trips.
+- gcc, clang, ASan/UBSan presets: 81/81 pass, warnings-as-errors clean.
+
+### Deferred / unresolved
+
+- Blowfish OFB-64 (zero IV) and the encrypted-transaction stream layer with the `flag`
+  key-permutation mechanics (`_TNSendTran`, UTransact.cpp:907-975) — Phase 3b.
+- The full HOPE login exchange (SessionKey/MacAlg/CipherAlg negotiation, `HMAC(login|password,
+  sessionKey)` digests, 16/20-byte digest fields) — Phase 3b.
+- Login lowercasing and `\r`→`-` replacement are text-encoding-aware (UText::MakeLowercase);
+  they land with the text layer.
+
 ### Recommended next phase
 
-**Phase 3 — Protocol payloads + legacy auth codecs.** Pure `hotline::protocol` work built on
-`appwarrior::core` (`endian`, `bits`): the field payload structs (`SMyFileInfo`, `SMyUserInfo`,
-`SMyUserAccess` — now with the verified MSB-first bit order —, dates, GUID), and the legacy
-login/auth codecs (bitwise-NOT scramble, `HLCrypt` two-key HMAC schedule, `Perm*Key(n)`) with
-golden vectors per audit/06 §11. Still no platform/UI dependencies; still fully testable with
-`appwarrior::testing`.
+**Phase 3b — Crypto completion.** Finish the protocol-crypto spine: Blowfish OFB-64 (zero IV,
+Eric Young self-test vectors from the legacy `HLBlowfishData.h` tables), the encrypted-transaction
+stream layer with the `flag` key-permutation mechanics (`_TNSendTran`, UTransact.cpp:907-975 —
+0/2/7/13 re-roll, 2-byte old-key prefix), and the full HOPE login exchange codec
+(SessionKey/MacAlg/CipherAlg negotiation, `HMAC(login|password, sessionKey)` digest fields).
+Still pure logic — no networking, no platform backends.

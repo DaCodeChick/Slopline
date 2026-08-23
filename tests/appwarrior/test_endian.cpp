@@ -58,3 +58,21 @@ AW_TEST_CASE("four_cc encodes a tag as a big-endian u32") {
   write_u32be(four_cc('T', 'R', 'T', 'P'), encoded);
   AW_REQUIRE_BYTES(encoded, "54 52 54 50");
 }
+
+AW_TEST_CASE("u64 big-endian round-trips across boundary values") {
+  const std::vector<std::uint64_t> values{0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000,
+                                          0xA000000000000400, 0xFFFFFFFFFFFFFFFF};
+  for (const std::uint64_t value : values) {
+    std::array<std::byte, 8> encoded{};
+    write_u64be(value, encoded);
+    AW_CHECK(read_u64be(encoded) == value);
+  }
+}
+
+AW_TEST_CASE("u32 little-endian golden and round-trip (legacy-Intel wire quirk)") {
+  std::array<std::byte, 4> encoded{};
+  write_u32le(0x54455854U, encoded);  // 'TEXT' as stored by legacy Intel hosts
+  AW_REQUIRE_BYTES(encoded, "54 58 45 54");
+  AW_CHECK(read_u32le(encoded) == 0x54455854U);
+  AW_CHECK(read_u32be(encoded) == 0x54584554U);  // same bytes, opposite reading
+}

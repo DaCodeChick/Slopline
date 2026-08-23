@@ -110,6 +110,16 @@ struct CheckFailed final : std::exception {
   return out;
 }
 
+// Convenience: ASCII text as raw bytes (no terminator).
+[[nodiscard]] inline auto bytes_from_ascii(std::string_view text) -> std::vector<std::byte> {
+  std::vector<std::byte> out;
+  out.reserve(text.size());
+  for (const char character : text) {
+    out.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+  }
+  return out;
+}
+
 // Compares actual bytes against the expected hex string, printing both on
 // mismatch.
 inline void require_bytes(std::span<const std::byte> actual, std::string_view expected_hex,

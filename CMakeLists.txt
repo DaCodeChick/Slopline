@@ -26,6 +26,7 @@ include(CompilerWarnings)
 include(Sanitizers)
 
 add_subdirectory(src/appwarrior)
+add_subdirectory(src/hotline/crypto)
 add_subdirectory(src/hotline/protocol)
 
 if(HOTLINE_BUILD_TESTS)
