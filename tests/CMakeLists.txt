@@ -9,6 +9,7 @@ add_executable(hotline_protocol_tests
   appwarrior/test_hmac.cpp
   appwarrior/test_guid.cpp
   appwarrior/test_blowfish.cpp
+  appwarrior/test_net.cpp
   protocol/test_constants.cpp
   protocol/test_transaction.cpp
   protocol/test_field_list.cpp
@@ -28,3 +29,15 @@ hotline_enable_warnings(hotline_protocol_tests)
 hotline_enable_sanitizers(hotline_protocol_tests)
 
 add_test(NAME protocol COMMAND hotline_protocol_tests)
+
+add_executable(hotline_net_tests
+  test_main.cpp
+  net/test_connection.cpp
+  net/test_session.cpp
+)
+target_link_libraries(hotline_net_tests PRIVATE hotline::net appwarrior::framework)
+
+hotline_enable_warnings(hotline_net_tests)
+hotline_enable_sanitizers(hotline_net_tests)
+
+add_test(NAME net COMMAND hotline_net_tests)

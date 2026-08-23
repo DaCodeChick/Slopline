@@ -925,9 +925,13 @@ buffers or arithmetic. (Read-only observation; nothing was modified.)
 - **TRTP establish (client→server)** — 12 bytes, big-endian:
   `54 52 54 50  48 4F 54 4C  00 01  00 02`  (`'TRTP'`, `'HOTL'`, version 1, subVersion 2).
 - **TRTP establish accept (server→client)** — 8 bytes: `54 52 54 50 00 00 00 00`.
-- **Empty transaction (e.g. `KeepConnectionAlive` request)** — 20-byte header:
+- **Transaction header for `KeepConnectionAlive`** — 20-byte header:
   `00 00 01 F4 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00`
-  (flag=0, isReply=0, type=500, id=1, error=0, totalSize=0, dataSize=0).
+  (flag=0, isReply=0, type=500, id=1, error=0, totalSize=0, dataSize=0). *(Corrected during
+  Phase 5 implementation: this tree's own keepalive carries a 2-byte empty field list body
+  (`00 00` — UFieldData::GetDataHandle creates the zero count), because the receive policy
+  kills any transaction with dataSize == 0. The header above is a valid header shape but does
+  not describe the tree's keepalive transaction.)*
 - **Single-field body `myField_ErrorText`="x"** — `00 01  00 64  00 01  78`
   (count=1, id=100, size=1, 'x').
 - **`myField_Vers`=197 as an integer field** — 2 bytes: `00 C5` (fits Int16 → 2-byte encoding).

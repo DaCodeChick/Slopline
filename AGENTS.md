@@ -1286,6 +1286,7 @@ The *component organization* survives as a source-level structure, not a linkage
 src/appwarrior/
     core/        aw::endian, aw::bits, aw::align, aw::ivar, aw::guid, aw::DecodeError
     crypto/      aw::crypto (MD5, SHA-1, HMAC, Blowfish)
+    net/         aw::net (RAII non-blocking Socket/Listener/Poller, IpAddress)
     testing/     aw::test (test registry, assertion macros, runner)
     ui/ …        (future)
     platform/ …  (future backend implementation units)

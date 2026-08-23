@@ -983,5 +983,6 @@ with general-purpose promotions (Phase 3c); AppWarrior consolidated into a singl
 static library (Phase 3d); FILP/RFLT/folder-item/`harc`/tracker codecs (Phase 4); AppWarrior
 as a shared library + fully expected-based (exception-free) production error handling
 (Phase 4b); configurable library shape via BUILD_SHARED_LIBS / BUILD_MONOLITHIC with AW_API
-Windows exports (Phase 4c) — 122/122 tests across all five build configurations. See
+Windows exports (Phase 4c); aw::net transport + the Hotline connection/session layer
+(Phase 5) — 142 tests across all six build configurations. See
 `docs/modernization-ledger.md`.

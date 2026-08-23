@@ -37,6 +37,7 @@ include(Sanitizers)
 
 add_subdirectory(src/appwarrior)
 add_subdirectory(src/hotline/protocol)
+add_subdirectory(src/hotline/net)
 
 if(HOTLINE_BUILD_TESTS)
   enable_testing()

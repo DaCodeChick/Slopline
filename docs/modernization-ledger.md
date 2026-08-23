@@ -18,8 +18,9 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | **Complete** |
 | 4b | Shared-library AppWarrior + exception-free expected-based error handling | **Complete** |
 | 4c | Configurable library shape (BUILD_SHARED_LIBS / BUILD_MONOLITHIC) + AW_API exports | **Complete** |
-| 5 | Networking (RAII transport, establish/session state machines) | Recommended next |
-| 6+ | Server core, client core, tracker app, UI backends | Planned |
+| 5 | Networking (aw::net transport, hotline::net connection + login session) | **Complete** |
+| 6 | Server core (listeners, dispatch, user/news DBs, agreement/banner) | Recommended next |
+
 
 ---
 
@@ -476,6 +477,63 @@ All four combinations are built and tested:
 
 **Verification:** all four combinations plus the compiler/sanitizer presets pass 122/122
 tests, warnings-as-errors clean.
+
+## Phase 5 — Networking
+
+### Delivered
+
+**`aw::net`** (`src/appwarrior/net/`, POSIX backend; the Windows backend joins the platform
+phase behind the same interface):
+
+- `IpAddress` (IPv4 + port, strict text parse, network-order u32) — Hotline is an IPv4 wire
+  protocol.
+- RAII non-blocking `Socket` / `Listener` / `make_socket_pair()` with `std::expected<..., NetError>`
+  throughout (would_block/closed/interrupted/refused/address_in_use/system; EINPROGRESS mapped —
+  the classic non-blocking-connect case).
+- `Poller` (poll(2)): register interests, readiness-driven `wait()` — no busy-waiting.
+
+**`hotline::net::Connection`** (`src/hotline/net/`) — the UTransact replacement:
+
+- Handshake in both roles: client sends 'TRTP' 'HOTL'/'HTXF' v1 sub2/3; server accepts 'TRTP'
+  and the legacy 'NICK' alias, replies 'TRTP' + 0, rejects version != 1 with reason 1 and
+  closes after flushing.
+- Transaction framing with multi-part reassembly by (isReply, id), dispatching at totalSize
+  with the last part's header.
+- The historical receive policy verbatim: totalSize == 0, dataSize == 0, or either above the
+  cap (2 MB framework / 512 KB server override) kills the connection — enforced AFTER the
+  crypto header decode, exactly like the legacy order.
+- `queue_keepalive()` reproduces the tree's real keepalive: transaction 500 with a **2-byte
+  empty field list** body.
+- Encrypted-transaction hooks (`choose_flag` / `encode` / `decode_header` / `decode_data`) that
+  wrap `TransactionCipher<H>`; `TransactionCipher::decode` was split into header/data stages so
+  the receive policy runs on decoded sizes.
+
+**`hotline::net::Session`** — login/agreement state machine (fresh → awaiting_agreement →
+active), extracted from `ProcessTran_Login`: login unscramble + ASCII lowercase + ''→'-',
+injected user lookup, password compared exactly as stored (received scrambled bytes vs stored
+scrambled bytes — never unscrambled), success reply (Vers/CommunityBannerID/ServerName), error
+replies with error 1 + ErrorText. The agreement/banner choreography itself lands with the
+server core.
+
+### Audit corrections / confirmations
+
+- **Keepalive body:** audit/06 §11.1's "empty transaction (e.g. KeepConnectionAlive)" golden
+  does not describe this tree's keepalive — `UFieldData::GetDataHandle` creates a 2-byte zero
+  count, so the legacy client sends body `00 00` (dataSize 2). An actual empty body would be
+  killed by the tree's own receive policy. audit/06 corrected.
+- **SendErrorMsg format-string overload** (audit/06 §11.2): confirmed — it calls
+  `SetSendError(1)` but never `SendData`, so the reply never goes out. The modern Session
+  always sends the ErrorText reply (deliberate fix, documented).
+
+### Verification
+
+- 15 new tests (142 total across both suites): socketpair echo/would-block/close semantics,
+  loopback listener/connect/accept/echo, poller edges; establish (TRTP/HTXF-v3/NICK/reject-
+  reason-1), transaction round-trip, keepalive bytes, multi-part reassembly, zero/oversized
+  kill policy, encrypted round-trip through TransactionCipher hooks (flag 5), and five session
+  scenarios.
+- 127 + 15 tests pass on gcc, clang, ASan/UBSan, and the static/modular/static-modular
+  configurations.
 
 ### Recommended next phase
 

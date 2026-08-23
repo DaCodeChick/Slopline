@@ -69,14 +69,21 @@ class TransactionCipher {
     }
   }
 
-  // Decodes header + data in place; returns the header flag read after
-  // the header decode (exactly like the legacy receive path).
-  [[nodiscard]] auto decode(std::span<std::byte, kTransactionHeaderSize> header,
-                            std::span<std::byte> data) -> std::uint8_t {
+  // Decodes the header in place; returns the flag read after the decode.
+  // Split from decode_data so callers can enforce the receive policy on
+  // the DECODED sizes (the legacy order: header decode -> policy check ->
+  // data decode).
+  [[nodiscard]] auto decode_header(std::span<std::byte, kTransactionHeaderSize> header)
+      -> std::uint8_t {
     cipher_.decode_stream(decode_stream_, header);
-    const std::uint8_t flag = std::to_integer<std::uint8_t>(header[0]);
+    return std::to_integer<std::uint8_t>(header[0]);
+  }
+
+  // Decodes the data in place for the given header flag (2-byte old-key
+  // prefix + permute for flag != 0, whole buffer for flag == 0).
+  void decode_data(std::span<std::byte> data, std::uint8_t flag) {
     if (data.empty()) {
-      return flag;
+      return;
     }
     if (flag != 0) {
       const std::size_t prefix = std::min<std::size_t>(2, data.size());
@@ -87,6 +94,14 @@ class TransactionCipher {
     } else {
       cipher_.decode_stream(decode_stream_, data);
     }
+  }
+
+  // Decodes header + data in place; returns the header flag (the legacy
+  // receive path).
+  [[nodiscard]] auto decode(std::span<std::byte, kTransactionHeaderSize> header,
+                            std::span<std::byte> data) -> std::uint8_t {
+    const std::uint8_t flag = decode_header(header);
+    decode_data(data, flag);
     return flag;
   }
 
