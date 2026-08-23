@@ -535,11 +535,36 @@ server core.
 - 127 + 15 tests pass on gcc, clang, ASan/UBSan, and the static/modular/static-modular
   configurations.
 
+## Phase 5a — Networking follow-ups (WinSock, IPv6, AW_API, role-split connections)
+
+Four follow-ups per project decision:
+
+1. **WinSock conditional compilation.** `aw::net` now carries parallel implementations in
+   each translation unit: WinSock2 (WSAStartup runtime, `ioctlsocket(FIONBIO)`, `closesocket`,
+   `WSAPoll`, WSA error mapping, `ws2_32` linked via CMake) vs POSIX (unchanged). The Windows
+   half is compile-untested here (no Windows toolchain in this environment) and will be
+   exercised by a Windows CI/build when the platform phase lands. `make_socket_pair()` is a
+   loopback TCP pair on Windows (no socketpair there).
+2. **`AW_API` on `IpAddress`** (class-level plus the out-of-line `from_text`/`to_text`
+   declarations) — the class previously escaped the export annotations.
+3. **IPv6.** `IpAddress` now carries a family (ipv4/ipv6), 16 bytes, and a scope id: strict
+   parsing of `a.b.c.d[:port]`, `[v6]:port`, and bare IPv6 (single "::" compression, 4-digit
+   hex groups, bracketed ports required for v6); text output with longest-zero-run
+   compression. `Socket`/`Listener` create per-family sockets; IPv6 listeners are dual-stack
+   (`IPV6_V6ONLY=0`) so IPv4-only Hotline traffic works over IPv6 hosts. The Hotline WIRE
+   formats remain IPv4 (tracker octets etc.).
+4. **Role-split connections.** `hotline::net::Connection` was split into
+   **`ClientConnection`** (client-only API: `start(socket, sub_protocol, sub_version)`) and
+   **`ServerConnection`** (server-only API: `start(socket)`, remote version getters) over a
+   shared private `ConnectionCore` — the Hotline client links no server entry point and the
+   server links no client entry point.
+
+**Verification:** 2 new tests (144 total); IPv6 parse/text round-trips and a v6 loopback
+listener test join the suite; 129 + 15 tests pass on gcc, clang, ASan/UBSan, static, modular,
+and static-modular configurations.
+
 ### Recommended next phase
 
-**Phase 5 — Networking.** The first platform-touching work: an AppWarrior RAII transport
-(native sockets behind the framework, per AGENTS.md's transport/connection/session layering),
-then the Hotline connection layer — TRTP/HTXF establish, framing/keepalive, the historical
-receive-policy caps (2 MB / 512 KB), deterministic shutdown — and the login/agreement session
-state machine using the Phase 3 auth codecs. Tests at the socket-pair integration boundary;
-still no UI.
+**Phase 6 — Server core.** With the transport/connection/session stack complete: the four
+listeners at basePort/+1/+2/+3, the 54-handler dispatch table, user/news databases,
+agreement/banner sequence, flood protection, and path-safety hardening.
