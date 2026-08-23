@@ -9,9 +9,10 @@
 
 namespace hotline::protocol {
 
-auto encode_field_list(const FieldList& list) -> std::vector<std::byte> {
+auto encode_field_list(const FieldList& list)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (list.fields.size() > kMaxFieldCount) {
-    throw std::length_error("field list has more than 65535 fields");
+    return std::unexpected(EncodeError::count_too_large);
   }
 
   std::vector<std::byte> out;
@@ -23,7 +24,7 @@ auto encode_field_list(const FieldList& list) -> std::vector<std::byte> {
 
   for (const Field& field : list.fields) {
     if (field.data.size() > kMaxFieldDataSize) {
-      throw std::length_error("field data larger than 65535 bytes");
+      return std::unexpected(EncodeError::element_too_large);
     }
 
     std::array<std::byte, 2> id_bytes{};

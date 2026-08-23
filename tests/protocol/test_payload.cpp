@@ -21,7 +21,7 @@ AW_TEST_CASE("FileInfo: golden encode with the legacy-Intel endianness quirk") {
 
   // type/creator little-endian (raw host copy on legacy Intel builds —
   // 'TEXT' appears byte-reversed); fileSize/nameSize big-endian.
-  const std::vector<std::byte> encoded = encode_file_info(info);
+  const std::vector<std::byte> encoded = unwrap(encode_file_info(info));
   AW_REQUIRE_BYTES_MSG(
       encoded,
       "54 58 45 54 74 78 74 74 12 34 56 78 00 00 00 00 00 00 00 05 61 2e 74 78 74",
@@ -58,7 +58,7 @@ AW_TEST_CASE("UserInfo: golden encode (all multi-byte fields big-endian)") {
   info.icon_id = -2;
   info.flags = 1;
   info.name = "ab";
-  AW_REQUIRE_BYTES_MSG(encode_user_info(info), "12 34 ff fe 00 01 00 02 61 62",
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_user_info(info)), "12 34 ff fe 00 01 00 02 61 62",
                     "user info wire form");
 
   const auto decoded = try_decode_user_info(bytes_from_hex("12 34 ff fe 00 01 00 02 61 62"));

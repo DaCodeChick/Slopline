@@ -37,7 +37,6 @@
 #include <cstdint>
 #include <expected>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -56,10 +55,12 @@ struct FieldList {
   std::vector<Field> fields;
 };
 
-// Encodes the list; throws std::length_error if it cannot be represented
-// on the wire (more than 65535 fields, or any field larger than 65535
-// bytes — the historical AddField limit).
-[[nodiscard]] auto encode_field_list(const FieldList& list) -> std::vector<std::byte>;
+// Encodes the list; returns EncodeError::count_too_large (more than
+// 65535 fields) or EncodeError::element_too_large (a field larger than
+// 65535 bytes — the historical AddField limit) when it cannot be
+// represented on the wire. Never throws.
+[[nodiscard]] auto encode_field_list(const FieldList& list)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 
 // Decodes a complete field list; every malformed input shape maps to a
 // DecodeError. Never throws, never reads out of bounds.

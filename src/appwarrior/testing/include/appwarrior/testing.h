@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <exception>
 #include <print>
 #include <source_location>
@@ -118,6 +119,17 @@ struct CheckFailed final : std::exception {
     out.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
   }
   return out;
+}
+
+// Unwraps a std::expected in tests: fails the current case if the result
+// holds an error. Keeps test call sites readable now that encode/decode
+// APIs are expected-based.
+template <typename T, typename E>
+[[nodiscard]] auto unwrap(std::expected<T, E> result) -> T {
+  if (!result.has_value()) {
+    fail("expected value, got an error");
+  }
+  return *std::move(result);
 }
 
 // Compares actual bytes against the expected hex string, printing both on

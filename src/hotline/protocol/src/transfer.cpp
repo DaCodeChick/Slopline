@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
 #include "appwarrior/core/endian.h"
@@ -46,9 +45,10 @@ void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
 
 }  // namespace
 
-auto encode_flat_file(const FlatFile& file) -> std::vector<std::byte> {
+auto encode_flat_file(const FlatFile& file)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (file.forks.size() > kMaxFieldCount) {
-    throw std::length_error("more than 65535 forks");
+    return std::unexpected(EncodeError::count_too_large);
   }
 
   std::vector<std::byte> out;
@@ -106,9 +106,10 @@ auto try_decode_flat_file(std::span<const std::byte> bytes)
   return file;
 }
 
-auto encode_info_fork(const FlatFileInfo& info) -> std::vector<std::byte> {
+auto encode_info_fork(const FlatFileInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (info.name.size() > kMaxFieldDataSize || info.comment.size() > kMaxFieldDataSize) {
-    throw std::length_error("info-fork name or comment longer than 65535 bytes");
+    return std::unexpected(EncodeError::string_too_long);
   }
 
   std::vector<std::byte> out;
@@ -170,9 +171,10 @@ auto try_decode_info_fork(std::span<const std::byte> bytes)
   return info;
 }
 
-auto encode_resume_data(const ResumeData& resume) -> std::vector<std::byte> {
+auto encode_resume_data(const ResumeData& resume)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (resume.entries.size() > kMaxFieldCount) {
-    throw std::length_error("more than 65535 resume entries");
+    return std::unexpected(EncodeError::count_too_large);
   }
 
   std::vector<std::byte> out;
@@ -235,11 +237,12 @@ auto data_resume_size(const ResumeData& resume) noexcept -> std::uint64_t {
   return size;
 }
 
-auto encode_folder_download_item(const FolderDownloadItem& item) -> std::vector<std::byte> {
+auto encode_folder_download_item(const FolderDownloadItem& item)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   std::vector<std::byte> path;
   for (const FolderPathComponent& component : item.path) {
     if (component.name.size() > 255) {
-      throw std::length_error("path component longer than 255 bytes");
+      return std::unexpected(EncodeError::string_too_long);
     }
     append_u16(path, component.script);
     path.push_back(static_cast<std::byte>(component.name.size()));
@@ -248,7 +251,7 @@ auto encode_folder_download_item(const FolderDownloadItem& item) -> std::vector<
 
   const std::size_t size = 4 + path.size();  // type + pathCount + path bytes
   if (size > kMaxFieldDataSize) {
-    throw std::length_error("folder-download item larger than 65535 bytes");
+    return std::unexpected(EncodeError::element_too_large);
   }
 
   std::vector<std::byte> out;
@@ -309,10 +312,15 @@ auto encode_folder_download_command(FolderDownloadAction action) -> std::array<s
   return out;
 }
 
-auto encode_folder_download_resume(const ResumeData& resume) -> std::vector<std::byte> {
-  std::vector<std::byte> rflt = encode_resume_data(resume);
+auto encode_folder_download_resume(const ResumeData& resume)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
+  auto rflt_result = encode_resume_data(resume);
+  if (!rflt_result.has_value()) {
+    return std::unexpected(rflt_result.error());
+  }
+  std::vector<std::byte> rflt = std::move(*rflt_result);
   if (rflt.size() > kMaxFieldDataSize) {
-    throw std::length_error("resume command larger than 65535 bytes");
+    return std::unexpected(EncodeError::element_too_large);
   }
   std::vector<std::byte> out;
   out.reserve(4 + rflt.size());

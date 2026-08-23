@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
 #include "appwarrior/core/endian.h"
@@ -45,10 +44,8 @@ void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
   out.insert(out.end(), bytes.begin(), bytes.end());
 }
 
+// Precondition (checked by the encode functions): text.size() <= 255.
 void append_pstring(std::vector<std::byte>& out, std::string_view text) {
-  if (text.size() > 255) {
-    throw std::length_error("p-string longer than 255 bytes");
-  }
   out.push_back(static_cast<std::byte>(text.size()));
   append_raw(out, text);
 }
@@ -66,6 +63,7 @@ void append_pstring(std::vector<std::byte>& out, std::string_view text) {
   return read_raw_name(bytes.subspan(1, length));
 }
 
+// Precondition (checked by the encode functions): name/description <= 255 bytes.
 void append_server_entry(std::vector<std::byte>& out, const TrackerServerEntry& entry) {
   for (const std::uint8_t octet : entry.address) {
     out.push_back(static_cast<std::byte>(octet));
@@ -108,7 +106,12 @@ void append_server_entry(std::vector<std::byte>& out, const TrackerServerEntry& 
 }  // namespace
 
 auto encode_tracker_registration(std::uint16_t type, const TrackerRegistration& registration)
-    -> std::vector<std::byte> {
+    -> std::expected<std::vector<std::byte>, EncodeError> {
+  if (registration.name.size() > 255 || registration.description.size() > 255 ||
+      registration.password.size() > 255) {
+    return std::unexpected(EncodeError::string_too_long);
+  }
+
   std::vector<std::byte> out;
   append_u16(out, type);
   append_u16(out, registration.port);
@@ -264,18 +267,21 @@ auto try_decode_tracker_handshake_reply(std::span<const std::byte> bytes)
 }
 
 auto encode_tracker_server_list(const TrackerServerListMessage& message)
-    -> std::vector<std::byte> {
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (message.servers.size() > kMaxFieldCount) {
-    throw std::length_error("more than 65535 servers in one message");
+    return std::unexpected(EncodeError::count_too_large);
   }
 
   std::vector<std::byte> entries;
   for (const TrackerServerEntry& entry : message.servers) {
+    if (entry.name.size() > 255 || entry.description.size() > 255) {
+      return std::unexpected(EncodeError::string_too_long);
+    }
     append_server_entry(entries, entry);
   }
   const std::size_t size = 4 + entries.size();  // totalCount + count + entries
   if (size > kMaxFieldDataSize) {
-    throw std::length_error("server-list message larger than 65535 bytes");
+    return std::unexpected(EncodeError::element_too_large);
   }
 
   std::vector<std::byte> out;
@@ -329,13 +335,17 @@ auto try_decode_tracker_server_list(std::span<const std::byte> bytes)
   return message;
 }
 
-auto encode_tracker_lookup_reply(const TrackerLookupReply& reply) -> std::vector<std::byte> {
+auto encode_tracker_lookup_reply(const TrackerLookupReply& reply)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   std::vector<std::byte> out;
   if (reply.found) {
+    if (reply.entry.name.size() > 255 || reply.entry.description.size() > 255) {
+      return std::unexpected(EncodeError::string_too_long);
+    }
     std::vector<std::byte> entry_bytes;
     append_server_entry(entry_bytes, reply.entry);
     if (entry_bytes.size() > kMaxFieldDataSize) {
-      throw std::length_error("lookup entry larger than 65535 bytes");
+      return std::unexpected(EncodeError::element_too_large);
     }
     append_u16(out, kLookupTypeFound);
     append_u16(out, static_cast<std::uint16_t>(entry_bytes.size()));

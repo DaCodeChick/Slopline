@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
 #include "appwarrior/core/endian.h"
@@ -39,9 +38,10 @@ auto read_raw_name(std::span<const std::byte> name_bytes) -> std::string {
 
 }  // namespace
 
-auto encode_file_info(const FileInfo& info) -> std::vector<std::byte> {
+auto encode_file_info(const FileInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (info.name.size() > kMaxFieldDataSize) {
-    throw std::length_error("file name longer than 65535 bytes");
+    return std::unexpected(EncodeError::string_too_long);
   }
 
   std::vector<std::byte> out;
@@ -92,9 +92,10 @@ auto try_decode_file_info(std::span<const std::byte> bytes)
   return info;
 }
 
-auto encode_user_info(const UserInfo& info) -> std::vector<std::byte> {
+auto encode_user_info(const UserInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError> {
   if (info.name.size() > kMaxFieldDataSize) {
-    throw std::length_error("user name longer than 65535 bytes");
+    return std::unexpected(EncodeError::string_too_long);
   }
 
   std::vector<std::byte> out;

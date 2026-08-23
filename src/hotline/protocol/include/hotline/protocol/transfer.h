@@ -30,7 +30,6 @@
 #include <cstdint>
 #include <expected>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -62,7 +61,8 @@ struct FlatFile {
   std::vector<FlatFileFork> forks;
 };
 
-[[nodiscard]] auto encode_flat_file(const FlatFile& file) -> std::vector<std::byte>;
+[[nodiscard]] auto encode_flat_file(const FlatFile& file)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_flat_file(std::span<const std::byte> bytes)
     -> std::expected<FlatFile, DecodeError>;
 
@@ -82,7 +82,8 @@ struct FlatFileInfo {
   std::vector<std::byte> comment;
 };
 
-[[nodiscard]] auto encode_info_fork(const FlatFileInfo& info) -> std::vector<std::byte>;
+[[nodiscard]] auto encode_info_fork(const FlatFileInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_info_fork(std::span<const std::byte> bytes)
     -> std::expected<FlatFileInfo, DecodeError>;
 
@@ -104,7 +105,8 @@ struct ResumeData {
   std::vector<ResumeEntry> entries;
 };
 
-[[nodiscard]] auto encode_resume_data(const ResumeData& resume) -> std::vector<std::byte>;
+[[nodiscard]] auto encode_resume_data(const ResumeData& resume)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_resume_data(std::span<const std::byte> bytes)
     -> std::expected<ResumeData, DecodeError>;
 
@@ -127,7 +129,7 @@ struct FolderDownloadItem {
 };
 
 [[nodiscard]] auto encode_folder_download_item(const FolderDownloadItem& item)
-    -> std::vector<std::byte>;
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_folder_download_item(std::span<const std::byte> bytes)
     -> std::expected<FolderDownloadItem, DecodeError>;
 
@@ -136,7 +138,7 @@ struct FolderDownloadItem {
 
 // ResumeFile command: u16 action=2, u16 size, RFLT data.
 [[nodiscard]] auto encode_folder_download_resume(const ResumeData& resume)
-    -> std::vector<std::byte>;
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_folder_download_resume(std::span<const std::byte> bytes)
     -> std::expected<ResumeData, DecodeError>;
 

@@ -21,7 +21,7 @@ AW_TEST_CASE("golden: single-field body") {
   AW_CHECK(decoded->fields[0].id == FieldId::ErrorText);
   AW_REQUIRE_BYTES_MSG(decoded->fields[0].data, "78", "single field data");
 
-  AW_REQUIRE_BYTES_MSG(encode_field_list(*decoded), "00 01 00 64 00 01 78",
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_field_list(*decoded)), "00 01 00 64 00 01 78",
                     "single-field re-encode");
 }
 
@@ -31,7 +31,7 @@ AW_TEST_CASE("multi-field list with duplicate IDs 112 round-trips verbatim") {
   list.fields.push_back(Field{FieldId::Options, bytes_from_hex("bb cc")});  // id 113
   list.fields.push_back(Field{FieldId::Visible, bytes_from_hex("dd")});     // id 112 again
 
-  const std::vector<std::byte> encoded = encode_field_list(list);
+  const std::vector<std::byte> encoded = unwrap(encode_field_list(list));
   AW_REQUIRE_BYTES_MSG(encoded, "00 03 00 70 00 01 aa 00 71 00 02 bb cc 00 70 00 01 dd",
                     "duplicate-ID encode");
 
@@ -60,7 +60,7 @@ AW_TEST_CASE("lookup follows legacy first-match semantics for duplicate IDs") {
 
 AW_TEST_CASE("empty list encodes as a zero count") {
   const FieldList empty;
-  AW_REQUIRE_BYTES_MSG(encode_field_list(empty), "00 00", "empty list");
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_field_list(empty)), "00 00", "empty list");
 
   const auto decoded = decode_field_list(bytes_from_hex("00 00"));
   AW_CHECK(decoded.has_value());
@@ -70,7 +70,7 @@ AW_TEST_CASE("empty list encodes as a zero count") {
 AW_TEST_CASE("zero-size fields are legal on the wire") {
   FieldList list;
   list.fields.push_back(Field{FieldId::Data, {}});
-  const std::vector<std::byte> encoded = encode_field_list(list);
+  const std::vector<std::byte> encoded = unwrap(encode_field_list(list));
   AW_REQUIRE_BYTES_MSG(encoded, "00 01 00 65 00 00", "zero-size field");
 
   const auto decoded = decode_field_list(encoded);
@@ -166,14 +166,9 @@ AW_TEST_CASE("string fields carry raw bytes without a terminator") {
 AW_TEST_CASE("encode rejects field data larger than 65535 bytes") {
   FieldList list;
   list.fields.push_back(Field{FieldId::Data, std::vector<std::byte>(65536)});
-
-  bool threw = false;
-  try {
-    (void)encode_field_list(list);
-  } catch (const std::length_error&) {
-    threw = true;
-  }
-  AW_CHECK(threw);
+  const auto result = encode_field_list(list);
+  AW_CHECK(!result.has_value());
+  AW_CHECK(result.error() == EncodeError::element_too_large);
 }
 
 AW_TEST_CASE("encode rejects more than 65535 fields") {
@@ -182,12 +177,7 @@ AW_TEST_CASE("encode rejects more than 65535 fields") {
   for (std::size_t i = 0; i <= kMaxFieldCount; ++i) {
     list.fields.push_back(Field{FieldId::Data, {}});
   }
-
-  bool threw = false;
-  try {
-    (void)encode_field_list(list);
-  } catch (const std::length_error&) {
-    threw = true;
-  }
-  AW_CHECK(threw);
+  const auto result = encode_field_list(list);
+  AW_CHECK(!result.has_value());
+  AW_CHECK(result.error() == EncodeError::count_too_large);
 }

@@ -1000,7 +1000,10 @@ std::optional<T>
 
 where appropriate.
 
-Exceptions are permitted where they provide the clearest design.
+**Amended (project decision, post-Phase 4):** production libraries (AppWarrior and
+Hotline) use `std::expected` / `std::unexpected` for ALL recoverable errors — decode *and*
+encode paths — and never throw for error handling. The only exceptions remaining are the test
+harness's assertion control flow (`aw::test::CheckFailed`) and standard-library facilities.
 
 Protocol errors should be structured and informative.
 
@@ -1267,9 +1270,9 @@ AppWarrior itself should have sufficiently modular components that non-GUI appli
 
 # AppWarrior Modularity
 
-> **Amended (project decision, post-Phase 3):** AppWarrior ships as **one monolithic static
-> library** (CMake target `appwarrior`, alias `appwarrior::appwarrior`) rather than separate
-> per-component library targets.
+> **Amended (project decision):** AppWarrior ships as **one monolithic SHARED library**
+> (CMake target `appwarrior`, alias `appwarrior::appwarrior` — `libappwarrior.so` /
+> `libappwarrior.dylib` / `appwarrior.dll`), not separate per-component targets.
 
 The *component organization* survives as a source-level structure, not a linkage structure:
 
@@ -1283,10 +1286,11 @@ src/appwarrior/
 ```
 
 Each component keeps its own directory and namespace, so the conceptual decomposition is
-preserved. Because the library is **static**, the linker pulls in only the objects a consumer
-actually references — a headless Hotline server never links unused code, and future
-Cocoa/Wayland/X11/Win32 backend objects cost nothing for consumers that do not use them. This
-replaces the earlier multi-target plan; do not reintroduce per-component library targets.
+preserved at the source level even though everything ships in one dynamic library. (Note: a
+shared library links ALL of its objects, so the earlier static-linker argument no longer
+applies — the framework is one deliberately-monolithic deliverable; keep platform backends
+behind the header/namespace boundaries so the code organization remains clean.) This replaces
+the earlier multi-target plan; do not reintroduce per-component library targets.
 
 ---
 
@@ -1384,7 +1388,7 @@ Support building appropriate targets independently.
 For example:
 
 ```text
-appwarrior            (the one monolithic static library — see "AppWarrior Modularity")
+appwarrior            (the one monolithic shared library — see "AppWarrior Modularity")
 hotline::protocol     (protocol codec library)
 Hotline client
 Hotline server

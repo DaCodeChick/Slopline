@@ -17,7 +17,7 @@ AW_TEST_CASE("FILP: minimal golden header + two empty forks") {
   file.forks.push_back(FlatFileFork{});
   file.forks.push_back(FlatFileFork{});
 
-  const std::vector<std::byte> encoded = encode_flat_file(file);
+  const std::vector<std::byte> encoded = unwrap(encode_flat_file(file));
   // 'FILP', version 1, 16 reserved zeros, forkCount 2, two empty fork headers.
   AW_REQUIRE_BYTES_MSG(std::span<const std::byte>(encoded).first<24>(),
                        "46 49 4c 50 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02",
@@ -39,10 +39,10 @@ AW_TEST_CASE("FILP: info + data fork round-trip") {
 
   FlatFile file;
   file.version = 1;
-  file.forks.push_back(FlatFileFork{kForkTypeInfo, 0, encode_info_fork(info)});
+  file.forks.push_back(FlatFileFork{kForkTypeInfo, 0, unwrap(encode_info_fork(info))});
   file.forks.push_back(FlatFileFork{kForkTypeData, 0, bytes_from_hex("68 69")});
 
-  const auto decoded = try_decode_flat_file(encode_flat_file(file));
+  const auto decoded = try_decode_flat_file(unwrap(encode_flat_file(file)));
   AW_CHECK(decoded.has_value());
   AW_CHECK(decoded->forks.size() == 2U);
   AW_CHECK(decoded->forks[0].type == kForkTypeInfo);
@@ -63,7 +63,7 @@ AW_TEST_CASE("FILP info fork: golden bytes (Windows writer shape)") {
   info.creator_sig = aw::endian::four_cc('t', 't', 'x', 't');
   info.name = "a.txt";
 
-  const std::vector<std::byte> encoded = encode_info_fork(info);
+  const std::vector<std::byte> encoded = unwrap(encode_info_fork(info));
   // 72 fixed bytes: platform/type/creator/flags/platFlags BE, 32 reserved,
   // two zero date stamps, script 0, nameSize 5, "a.txt", zero-length comment.
   AW_REQUIRE_BYTES_MSG(
@@ -108,7 +108,7 @@ AW_TEST_CASE("RFLT: golden resume record for a 100-byte data fork") {
   resume.version = 1;
   resume.entries.push_back(ResumeEntry{kForkTypeData, 100});
 
-  const std::vector<std::byte> encoded = encode_resume_data(resume);
+  const std::vector<std::byte> encoded = unwrap(encode_resume_data(resume));
   AW_REQUIRE_BYTES_MSG(
       encoded,
       "52 46 4c 54 00 01"
@@ -171,13 +171,13 @@ AW_TEST_CASE("folder download item: golden file and folder headers") {
   FolderDownloadItem file;
   file.folder = false;
   file.path.push_back(FolderPathComponent{0, "a.txt"});
-  AW_REQUIRE_BYTES_MSG(encode_folder_download_item(file),
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_folder_download_item(file)),
                        "00 0c 00 00 00 01 00 00 05 61 2e 74 78 74", "file item");
 
   FolderDownloadItem folder;
   folder.folder = true;
   folder.path.push_back(FolderPathComponent{0, "a.txt"});
-  AW_REQUIRE_BYTES_MSG(encode_folder_download_item(folder),
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_folder_download_item(folder)),
                        "00 0c 00 01 00 01 00 00 05 61 2e 74 78 74", "folder item");
 
   const auto decoded = try_decode_folder_download_item(
@@ -192,7 +192,7 @@ AW_TEST_CASE("folder download item: multi-component path") {
   FolderDownloadItem item;
   item.path.push_back(FolderPathComponent{0, "sub"});
   item.path.push_back(FolderPathComponent{0, "a.txt"});
-  const std::vector<std::byte> encoded = encode_folder_download_item(item);
+  const std::vector<std::byte> encoded = unwrap(encode_folder_download_item(item));
   AW_REQUIRE_BYTES_MSG(encoded,
                        "00 12 00 00 00 02 00 00 03 73 75 62 00 00 05 61 2e 74 78 74",
                        "two-component item");
@@ -215,7 +215,7 @@ AW_TEST_CASE("folder download resume command round-trips") {
   resume.version = 1;
   resume.entries.push_back(ResumeEntry{kForkTypeData, 100});
 
-  const std::vector<std::byte> encoded = encode_folder_download_resume(resume);
+  const std::vector<std::byte> encoded = unwrap(encode_folder_download_resume(resume));
   AW_CHECK(encoded.size() == 4U + kResumeDataHeaderSize + kResumeEntrySize);
   AW_REQUIRE_BYTES_MSG(std::span<const std::byte>(encoded).first<4>(), "00 02 00 3a",
                        "action + size prefix");

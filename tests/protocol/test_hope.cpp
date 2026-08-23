@@ -17,7 +17,7 @@ using namespace aw::test;
 AW_TEST_CASE("stage 1: golden request (login/password zero bytes, algorithm lists)") {
   const FieldList request = build_stage1_login();
   AW_REQUIRE_BYTES_MSG(
-      encode_field_list(request),
+      unwrap(encode_field_list(request)),
       "00 04"
       " 00 69 00 01 00"
       " 00 6a 00 01 00"

@@ -21,7 +21,7 @@ AW_TEST_CASE("registration: golden UDP add message") {
   registration.description = "desc";
   registration.password = "pw";
 
-  const std::vector<std::byte> encoded = encode_tracker_registration(kRegistrationTypeAdd, registration);
+  const std::vector<std::byte> encoded = unwrap(encode_tracker_registration(kRegistrationTypeAdd, registration));
   AW_REQUIRE_BYTES_MSG(
       encoded,
       "00 01 15 7c 00 03 00 01 11 22 33 44 06 4d 79 53 65 72 76 04 64 65 73 63 02 70 77",
@@ -45,7 +45,7 @@ AW_TEST_CASE("registration: remove type and shape errors") {
   registration.description = "y";
   registration.password = "z";
   const std::vector<std::byte> remove_msg =
-      encode_tracker_registration(kRegistrationTypeRemove, registration);
+      unwrap(encode_tracker_registration(kRegistrationTypeRemove, registration));
   AW_REQUIRE_BYTES_MSG(std::span<const std::byte>(remove_msg).first<2>(), "00 02", "remove type");
 
   const auto short_form = try_decode_tracker_registration(bytes_from_hex("00 01 00 00 00 00 00 00"));
@@ -134,7 +134,7 @@ AW_TEST_CASE("server list: golden single-entry message") {
   entry.description = "hi";
   message.servers.push_back(entry);
 
-  const std::vector<std::byte> encoded = encode_tracker_server_list(message);
+  const std::vector<std::byte> encoded = unwrap(encode_tracker_server_list(message));
   AW_REQUIRE_BYTES_MSG(
       encoded,
       "00 01 00 18 00 01 00 01"
@@ -169,7 +169,7 @@ AW_TEST_CASE("server list: multi-entry message round-trips") {
   message.servers.push_back(first);
   message.servers.push_back(second);
 
-  const auto decoded = try_decode_tracker_server_list(encode_tracker_server_list(message));
+  const auto decoded = try_decode_tracker_server_list(unwrap(encode_tracker_server_list(message)));
   AW_CHECK(decoded.has_value());
   AW_CHECK(decoded->servers.size() == 2U);
   AW_CHECK(decoded->servers[1].name == "Beta");
@@ -185,12 +185,12 @@ AW_TEST_CASE("lookup: found and not-found goldens") {
   found.entry.name = "MyServ";
   found.entry.description = "hi";
   AW_REQUIRE_BYTES_MSG(
-      encode_tracker_lookup_reply(found),
+      unwrap(encode_tracker_lookup_reply(found)),
       "00 04 00 14 c0 a8 01 0a 15 7c 00 03 00 00 06 4d 79 53 65 72 76 02 68 69",
       "found reply");
 
   TrackerLookupReply not_found;
-  AW_REQUIRE_BYTES_MSG(encode_tracker_lookup_reply(not_found), "00 05 00 00", "not-found reply");
+  AW_REQUIRE_BYTES_MSG(unwrap(encode_tracker_lookup_reply(not_found)), "00 05 00 00", "not-found reply");
 
   const auto decoded_found = try_decode_tracker_lookup_reply(bytes_from_hex(
       "00 04 00 14 c0 a8 01 0a 15 7c 00 03 00 00 06 4d 79 53 65 72 76 02 68 69"));

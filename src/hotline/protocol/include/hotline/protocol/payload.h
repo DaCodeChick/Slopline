@@ -12,7 +12,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,7 +49,8 @@ struct FileInfo {
   std::string name;               // raw bytes (MacRoman historically)
 };
 
-[[nodiscard]] auto encode_file_info(const FileInfo& info) -> std::vector<std::byte>;
+[[nodiscard]] auto encode_file_info(const FileInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_file_info(std::span<const std::byte> bytes)
     -> std::expected<FileInfo, DecodeError>;
 
@@ -72,7 +72,8 @@ struct UserInfo {
   std::string name;  // raw bytes
 };
 
-[[nodiscard]] auto encode_user_info(const UserInfo& info) -> std::vector<std::byte>;
+[[nodiscard]] auto encode_user_info(const UserInfo& info)
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_user_info(std::span<const std::byte> bytes)
     -> std::expected<UserInfo, DecodeError>;
 

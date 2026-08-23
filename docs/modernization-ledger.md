@@ -16,6 +16,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 3c | `aw` namespace + framework/general-purpose promotions | **Complete** |
 | 3d | AppWarrior consolidated into a single monolithic library | **Complete** |
 | 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | **Complete** |
+| 4b | Shared-library AppWarrior + exception-free expected-based error handling | **Complete** |
 | 5 | Networking (RAII transport, establish/session state machines) | Recommended next |
 | 6+ | Server core, client core, tracker app, UI backends | Planned |
 
@@ -324,14 +325,33 @@ per-component library targets.
 **Verification:** unchanged behavior — 98/98 tests pass on gcc, clang and ASan/UBSan presets
 with the single library.
 
-### Recommended next phase
+---
 
-**Phase 5 — Networking.** The first platform-touching work: an AppWarrior RAII transport
-(native sockets behind the framework, per AGENTS.md's transport/connection/session layering),
-then the Hotline connection layer — TRTP/HTXF establish, framing/keepalive, the historical
-receive-policy caps (2 MB / 512 KB), deterministic shutdown — and the login/agreement session
-state machine using the Phase 3 auth codecs. Tests at the socket-pair integration boundary;
-still no UI.
+## Phase 4b — Shared-library AppWarrior + exception-free expected-based errors
+
+Two project decisions (AGENTS.md amended):
+
+**1. AppWarrior ships as one SHARED library.** The `appwarrior` target is now `SHARED`
+(`libappwarrior.so.0.1.0` with soname, `WINDOWS_EXPORT_ALL_SYMBOLS` for future Windows
+builds). All Hotline applications link the one dynamic library. The component organization
+(directories + `aw::` namespaces) is unchanged; note the shared library links all of its
+objects, so the earlier static-linker argument in the Phase 3d note no longer applies — the
+charter's Modularity section now states the shared-library decision explicitly.
+
+**2. Production error handling is exception-free.** All 14 remaining `std::length_error`
+throw sites (the encode paths in `field_list`, `payload`, `transfer`, `tracker`) were
+converted to `std::expected<T, EncodeError>` with a new shared `aw::EncodeError`
+(`element_too_large`, `count_too_large`, `string_too_long`; re-exported as
+`hotline::protocol::EncodeError`). Decode already returned `std::expected`. Production
+libraries now never throw for recoverable errors; the only remaining exceptions are the test
+harness's assertion control flow (`aw::test::CheckFailed`, plus `bytes_from_hex` parse
+failures) and standard-library facilities. Tests use a new `aw::test::unwrap()` helper so
+expected-based call sites stay readable; the two `length_error` catch-tests now assert the
+specific `EncodeError` values instead.
+
+**Verification:** unchanged behavior — 122/122 tests pass on gcc, clang and ASan/UBSan
+presets, now linking against `libappwarrior.so`.
+
 
 ---
 
@@ -424,3 +444,12 @@ builder (the reference tree's server never sent one — client-only feature).
   both directions, stream continuity across transactions, 1-byte-payload fix), HOPE stage
   goldens + parse tests + digest goldens from an independent python implementation.
 - gcc, clang, ASan/UBSan presets: 98/98 pass, warnings-as-errors clean.
+
+### Recommended next phase
+
+**Phase 5 — Networking.** The first platform-touching work: an AppWarrior RAII transport
+(native sockets behind the framework, per AGENTS.md's transport/connection/session layering),
+then the Hotline connection layer — TRTP/HTXF establish, framing/keepalive, the historical
+receive-policy caps (2 MB / 512 KB), deterministic shutdown — and the login/agreement session
+state machine using the Phase 3 auth codecs. Tests at the socket-pair integration boundary;
+still no UI.

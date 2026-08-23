@@ -980,5 +980,7 @@ with `endian`/`bits`/`align`/`ivar` and the typedefs.h + container verdicts (Pha
 digests/HMAC/key-schedule plus payload codecs and login scramble (Phase 3); Blowfish OFB-64,
 the encrypted-transaction cipher and the HOPE login codec (Phase 3b); framework namespace `aw`
 with general-purpose promotions (Phase 3c); AppWarrior consolidated into a single monolithic
-static library (Phase 3d); FILP/RFLT/folder-item/`harc`/tracker codecs (Phase 4) — 122/122
-tests across gcc/clang/ASan-UBSan. See `docs/modernization-ledger.md`.
+static library (Phase 3d); FILP/RFLT/folder-item/`harc`/tracker codecs (Phase 4); AppWarrior
+as a shared library + fully expected-based (exception-free) production error handling
+(Phase 4b) — 122/122 tests across gcc/clang/ASan-UBSan. See
+`docs/modernization-ledger.md`.

@@ -2,9 +2,10 @@
 //
 // Shared by every AppWarrior codec (and re-exported by Hotline protocol
 // codecs): decode functions return std::expected<T, DecodeError> because
-// untrusted input must never throw or read out of bounds. Encode functions
-// are the opposite: callers hold only program data, so programmer errors
-// throw std::length_error.
+// untrusted input must never throw or read out of bounds. Encode
+// functions likewise return std::expected<T, EncodeError> — no
+// recoverable-error path in the production libraries throws
+// (see encode_error.h).
 
 #pragma once
 

@@ -28,7 +28,6 @@
 #include <cstdint>
 #include <expected>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -71,7 +70,7 @@ struct TrackerRegistrationMessage {
 
 [[nodiscard]] auto encode_tracker_registration(std::uint16_t type,
                                                const TrackerRegistration& registration)
-    -> std::vector<std::byte>;
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_tracker_registration(std::span<const std::byte> bytes)
     -> std::expected<TrackerRegistrationMessage, DecodeError>;
 
@@ -114,7 +113,7 @@ struct TrackerServerListMessage {
 };
 
 [[nodiscard]] auto encode_tracker_server_list(const TrackerServerListMessage& message)
-    -> std::vector<std::byte>;
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_tracker_server_list(std::span<const std::byte> bytes)
     -> std::expected<TrackerServerListMessage, DecodeError>;
 
@@ -124,7 +123,7 @@ struct TrackerLookupReply {
 };
 
 [[nodiscard]] auto encode_tracker_lookup_reply(const TrackerLookupReply& reply)
-    -> std::vector<std::byte>;
+    -> std::expected<std::vector<std::byte>, EncodeError>;
 [[nodiscard]] auto try_decode_tracker_lookup_reply(std::span<const std::byte> bytes)
     -> std::expected<TrackerLookupReply, DecodeError>;
 
