@@ -19,8 +19,7 @@ add_executable(hotline_protocol_tests
   protocol/test_transaction_cipher.cpp
   protocol/test_hope.cpp
 )
-target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::crypto
-                                                      appwarrior::testing appwarrior::core)
+target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::appwarrior)
 
 hotline_enable_warnings(hotline_protocol_tests)
 hotline_enable_sanitizers(hotline_protocol_tests)

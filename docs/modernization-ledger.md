@@ -14,6 +14,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 3 | Protocol payloads + legacy auth (digests/HMAC, key schedule, scramble, payload codecs) | **Complete** |
 | 3b | Crypto completion (Blowfish OFB-64, encrypted transactions, HOPE login) | **Complete** |
 | 3c | `aw` namespace + framework/general-purpose promotions | **Complete** |
+| 3d | AppWarrior consolidated into a single monolithic library | **Complete** |
 | 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | Recommended next |
 | 5+ | Net/transport, server core, client core, UI backends | Planned |
 
@@ -281,11 +282,11 @@ affects code that interpreted the two u32 *values* numerically across hosts. The
 
 **Naming (C++ only):** the framework namespace is now the short prefix **`aw`** — `aw::endian`,
 `aw::bits`, `aw::align`, `aw::ivar`, `aw::test`, `aw::crypto`, `aw::guid`, plus `aw::DecodeError`
-at the root. The framework *name* remains **AppWarrior** (AGENTS.md charter); CMake target names
-stay `appwarrior::core` / `appwarrior::crypto` / `appwarrior::testing` (build graph tracks the
-framework name); the test macros stay `AW_`-prefixed (macros cannot be namespaced). Rationale:
-`aw` is the code-level brevity the same way the historical code leaned on `U`/`C` prefixes —
-scoping is handled by the namespace, so the prefix stays short.
+at the root. The framework *name* remains **AppWarrior** (AGENTS.md charter); the CMake target is
+`appwarrior` / `appwarrior::appwarrior` (single monolithic library since Phase 3d); the test
+macros stay `AW_`-prefixed (macros cannot be namespaced). Rationale: `aw` is the code-level
+brevity the same way the historical code leaned on `U`/`C` prefixes — scoping is handled by the
+namespace, so the prefix stays short.
 
 **Promotions into AppWarrior (general-purpose, not Hotline-specific):**
 
@@ -301,6 +302,26 @@ land in `aw::crypto` in Phase 3b; the encrypted-transaction stream stays Hotline
 
 **Verification:** unchanged behavior — all 81 cases pass on gcc, clang and ASan/UBSan presets
 after the restructure (pure rename/promotion; no semantic edits).
+
+---
+
+## Phase 3d — AppWarrior consolidated into a single monolithic library
+
+Per project decision (AGENTS.md "AppWarrior Modularity", amended): the three component targets
+(`appwarrior_core`, `appwarrior_crypto`, `appwarrior_testing`) are merged into **one STATIC
+library** — CMake target `appwarrior`, alias `appwarrior::appwarrior` — with a single
+`src/appwarrior/CMakeLists.txt`; the per-component CMakeLists are deleted. Consumers
+(`hotline::protocol`, tests) link the one target.
+
+The *component organization* survives at the source level (directories + `aw::` sub-namespaces:
+`core/`, `crypto/`, `testing/`; future `ui/`, `platform/`), so the conceptual decomposition and
+the platform-backend boundaries are unaffected. Because the library is static, the linker pulls
+in only referenced objects — a headless Hotline server never links unused code, and future
+GUI/backend objects cost nothing for consumers that don't use them. Do not reintroduce
+per-component library targets.
+
+**Verification:** unchanged behavior — 98/98 tests pass on gcc, clang and ASan/UBSan presets
+with the single library.
 
 ### Recommended next phase
 

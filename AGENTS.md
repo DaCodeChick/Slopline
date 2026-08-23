@@ -1267,21 +1267,26 @@ AppWarrior itself should have sufficiently modular components that non-GUI appli
 
 # AppWarrior Modularity
 
-Modern AppWarrior should avoid being one enormous indivisible library.
+> **Amended (project decision, post-Phase 3):** AppWarrior ships as **one monolithic static
+> library** (CMake target `appwarrior`, alias `appwarrior::appwarrior`) rather than separate
+> per-component library targets.
 
-Logical components may include:
+The *component organization* survives as a source-level structure, not a linkage structure:
 
 ```text
-AppWarrior Core
-AppWarrior Platform
-AppWarrior Network
-AppWarrior UI
-AppWarrior Graphics
+src/appwarrior/
+    core/        aw::endian, aw::bits, aw::align, aw::ivar, aw::guid, aw::DecodeError
+    crypto/      aw::crypto (MD5, SHA-1, HMAC, Blowfish)
+    testing/     aw::test (test registry, assertion macros, runner)
+    ui/ …        (future)
+    platform/ …  (future backend implementation units)
 ```
 
-Exact targets should follow dependency analysis.
-
-A headless Hotline server should not need Cocoa/AppKit, Wayland, X11, or Windows UI components merely to use AppWarrior core functionality.
+Each component keeps its own directory and namespace, so the conceptual decomposition is
+preserved. Because the library is **static**, the linker pulls in only the objects a consumer
+actually references — a headless Hotline server never links unused code, and future
+Cocoa/Wayland/X11/Win32 backend objects cost nothing for consumers that do not use them. This
+replaces the earlier multi-target plan; do not reintroduce per-component library targets.
 
 ---
 
@@ -1379,8 +1384,8 @@ Support building appropriate targets independently.
 For example:
 
 ```text
-AppWarrior core
-AppWarrior UI
+appwarrior            (the one monolithic static library — see "AppWarrior Modularity")
+hotline::protocol     (protocol codec library)
 Hotline client
 Hotline server
 Hotline tracker

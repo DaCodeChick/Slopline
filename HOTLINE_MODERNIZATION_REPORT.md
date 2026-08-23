@@ -979,5 +979,6 @@ documentation updated):
 with `endian`/`bits`/`align`/`ivar` and the typedefs.h + container verdicts (Phase 2);
 digests/HMAC/key-schedule plus payload codecs and login scramble (Phase 3); Blowfish OFB-64,
 the encrypted-transaction cipher and the HOPE login codec (Phase 3b); framework namespace `aw`
-with general-purpose promotions (Phase 3c) — 98/98 tests across gcc/clang/ASan-UBSan. See
+with general-purpose promotions (Phase 3c); AppWarrior consolidated into a single monolithic
+static library (Phase 3d) — 98/98 tests across gcc/clang/ASan-UBSan. See
 `docs/modernization-ledger.md`.
