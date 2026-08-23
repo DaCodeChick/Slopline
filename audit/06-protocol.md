@@ -690,8 +690,11 @@ component[pathCount] = { Uint16 script (=0); Uint8 namelen; Uint8 name[namelen];
 
 The path is built back-to-front by `CMyDLFldr::GetNextItem` (`HotlineFolderDownload.cpp`); each
 component is `{ Uint16 script=0, p-string name }`. The client drives it with 16-bit
-`dlFldrAction_*` commands (`HotlineClientServerCommon.h:243-248`): 1 = NextFile, 2 =
-ResumeFile, 3 = SendFile. On ResumeFile the client sends `{Uint16 action=2; Uint16 size; RFLT
+`dlFldrAction_*` commands (`HotlineClientServerCommon.h:243-248`): 1 = SendFile, 2 =
+ResumeFile, 3 = NextFile. *(Corrected during Phase 4 implementation: this section originally
+swapped SendFile/NextFile; the verbatim enum and the server dispatch — it waits for
+`dlFldrAction_NextFile` before sending the next item — confirm SendFile=1, ResumeFile=2,
+NextFile=3.)* On ResumeFile the client sends `{Uint16 action=2; Uint16 size; RFLT
 resume data}` (`HotlineTasks.cpp:3592-3603`). Server replies to SendFile with a `Uint32`
 flattened size, then streams the FILP file (§6.2).
 

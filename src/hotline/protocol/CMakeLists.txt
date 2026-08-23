@@ -11,6 +11,9 @@ add_library(hotline_protocol STATIC
   src/handshake.cpp
   src/payload.cpp
   src/hope.cpp
+  src/transfer.cpp
+  src/archive.cpp
+  src/tracker.cpp
 )
 add_library(hotline::protocol ALIAS hotline_protocol)
 
@@ -19,6 +22,8 @@ target_include_directories(hotline_protocol PUBLIC
 )
 target_compile_features(hotline_protocol PUBLIC cxx_std_23)
 target_link_libraries(hotline_protocol PUBLIC appwarrior::appwarrior)
+find_package(ZLIB REQUIRED)
+target_link_libraries(hotline_protocol PRIVATE ZLIB::ZLIB)
 
 hotline_enable_warnings(hotline_protocol)
 hotline_enable_sanitizers(hotline_protocol)

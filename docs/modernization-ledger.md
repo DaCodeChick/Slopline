@@ -15,8 +15,9 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 3b | Crypto completion (Blowfish OFB-64, encrypted transactions, HOPE login) | **Complete** |
 | 3c | `aw` namespace + framework/general-purpose promotions | **Complete** |
 | 3d | AppWarrior consolidated into a single monolithic library | **Complete** |
-| 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | Recommended next |
-| 5+ | Net/transport, server core, client core, UI backends | Planned |
+| 4 | Transfer/archive/tracker codecs (FILP/RFLT/folder items/harc, tracker messages) | **Complete** |
+| 5 | Networking (RAII transport, establish/session state machines) | Recommended next |
+| 6+ | Server core, client core, tracker app, UI backends | Planned |
 
 ---
 
@@ -325,11 +326,52 @@ with the single library.
 
 ### Recommended next phase
 
-**Phase 4 — Transfer/archive/tracker codecs.** Remaining pure-logic protocol work: FILP flat-file
-and RFLT resume-data codecs, folder-download item headers + `dlFldrAction_*` protocol, `'harc'`
-archive framing, and the tracker registration/list messages — all per audit/06, still zero
-platform/UI dependencies. Networking (RAII transport, establish/session state machines) follows
-as Phase 5.
+**Phase 5 — Networking.** The first platform-touching work: an AppWarrior RAII transport
+(native sockets behind the framework, per AGENTS.md's transport/connection/session layering),
+then the Hotline connection layer — TRTP/HTXF establish, framing/keepalive, the historical
+receive-policy caps (2 MB / 512 KB), deterministic shutdown — and the login/agreement session
+state machine using the Phase 3 auth codecs. Tests at the socket-pair integration boundary;
+still no UI.
+
+---
+
+## Phase 4 — Transfer/archive/tracker codecs
+
+### Delivered (`hotline::protocol`, all byte-verified against legacy writers/readers)
+
+| Codec | Legacy source | Wire form |
+|---|---|---|
+| `transfer.h/.cpp` — FILP flat-file package | `UFileSys(W).cpp:2180-2440` | 24-byte header ('FILP', version, 16 reserved, forkCount) + forkCount × {16-byte fork header + data}; INFO-then-DATA stream order; INFO fork = 72 fixed bytes + name + u16 commentSize + comment |
+| `transfer.h/.cpp` — RFLT resume record | `UFileSys(W).cpp:2216-2226, 2310-2332` | 'RFLT', version 1, 34 reserved, u16 count, count × 16-byte entries; `data_resume_size()` mirrors ResumeFlatten (last DATA entry wins) |
+| `transfer.h/.cpp` — folder-download items + commands | `HotlineServ.cpp:5500-5570`, `HotlineTasks.cpp:3480-3610` | item = u16 size + u16 type (bit0 folder) + u16 pathCount + {u16 script, u8 namelen, name} components (root excluded); ResumeFile command = u16 action 2 + u16 size + RFLT |
+| `archive.h/.cpp` — 'harc' container | `HotlineArchiveStruct.h` + `HotlineArchiveDecoder.cpp` | 98-byte header + per-file path head/path/file-rsvd/file-head + payload; `decompress_archive_entry()` inflates 'zlib' (system zlib) or passes 'raw ' through |
+| `tracker.h/.cpp` — tracker messages | `TrackerServ.cpp:585-643, 1055-1170`; `HotlineTasks.cpp:5939-5959, 6057-6065` | UDP registration (type/port/userCount/flags/passID + 3 p-strings); 'HTRK' handshake v1/v2 (32-byte padded credentials); server-list messages (type 1, size, totalCount, count, entries with raw IP octets); lookup 4/5 |
+
+### Audit correction (applied to audit/06 §6.4)
+
+The audit printed the `dlFldrAction_*` mapping with SendFile/NextFile swapped. The verbatim
+enum (`HotlineClientServerCommon.h`) and the server's dispatch — it waits for
+`dlFldrAction_NextFile` before sending the next item — confirm **SendFile = 1, ResumeFile = 2,
+NextFile = 3**. The modern `FolderDownloadAction` enum always had the correct values; the
+audit text is fixed.
+
+### Hardening divergences (documented)
+
+- `DecompressArchiveEntry` caps `decompressedSize` at 64 MiB (`kMaxArchiveEntryDecompressedSize`)
+  — the legacy decoder allocated straight from the attacker-visible field (audit/06 §10 hazard).
+- `aw::DecodeError` gained the generic `wrong_format_tag` and `unsupported_version` values
+  (shared by FILP/RFLT/harc/HTRK tag and version checks).
+
+### Verification
+
+- 24 new test cases (122 total): FILP header/info/fork goldens + round-trips + malformed
+  sweeps; RFLT golden (100-byte data fork) + last-DATA-wins + tag/version/truncation errors;
+  folder-item goldens (file/folder/multi-component) + verified 1/2/3 command mapping + resume
+  command round-trip; harc raw + zlib goldens (python-oracle zlib payload) + header/entry/
+  decompress error paths; tracker registration/handshake v1-v2/server-list/lookup goldens +
+  shape errors.
+- `hotline::protocol` now links system zlib (`find_package(ZLIB)`) for the harc payloads.
+- gcc, clang, ASan/UBSan presets: 122/122 pass, warnings-as-errors clean.
 
 ---
 

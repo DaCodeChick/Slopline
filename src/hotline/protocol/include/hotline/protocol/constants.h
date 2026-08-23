@@ -291,6 +291,9 @@ enum class FolderDownloadAction : std::uint16_t {
   SendFile   = 1,
   ResumeFile = 2,
   NextFile   = 3,
+  // NOTE: audit/06 §6.4 printed the SendFile/NextFile mapping swapped;
+  // the verbatim enum and the server dispatch (it waits for
+  // dlFldrAction_NextFile) confirm SendFile=1, ResumeFile=2, NextFile=3.
 };
 
 // ---------------------------------------------------------------------------

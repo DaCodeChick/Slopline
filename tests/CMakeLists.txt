@@ -18,6 +18,9 @@ add_executable(hotline_protocol_tests
   protocol/test_key_schedule.cpp
   protocol/test_transaction_cipher.cpp
   protocol/test_hope.cpp
+  protocol/test_transfer.cpp
+  protocol/test_archive.cpp
+  protocol/test_tracker.cpp
 )
 target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::appwarrior)
 

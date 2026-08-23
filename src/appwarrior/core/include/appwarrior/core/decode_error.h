@@ -21,6 +21,12 @@ enum class DecodeError {
   // Modern behavior: explicit error — a deliberate hardening divergence
   // that no valid peer can trigger.
   invalid_integer_field_size,
+  // A format tag ('FILP', 'RFLT', 'harc', 'HTRK', ...) that is not the
+  // expected one.
+  wrong_format_tag,
+  // A version field the decoder does not support (legacy behavior:
+  // fail with "version unknown").
+  unsupported_version,
 };
 
 }  // namespace aw
