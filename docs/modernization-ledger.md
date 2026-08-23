@@ -10,8 +10,8 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 1 | Build foundation + `hotline::protocol` wire codec | **Complete** |
 | 1b | AppWarrior `testing` component (framework test facility) | **Complete** |
 | 2a | AppWarrior Core: big-endian helpers (`appwarrior::endian`) | **Complete** |
-| 2 | AppWarrior Core foundation (types, containers, event/application model seams) | Recommended next |
-| 3 | Protocol payloads + legacy auth codecs (scramble, HMAC key schedule, HOPE) | Planned |
+| 2 | AppWarrior Core foundation (types, bits/align, IVA1 reader, container verdicts) | **Complete** |
+| 3 | Protocol payloads + legacy auth codecs (scramble, HMAC key schedule, HOPE) | Recommended next |
 | 4+ | Net/transport, server core, client core, tracker, UI backends | Planned |
 
 ---
@@ -156,14 +156,72 @@ The old `hotline/protocol/endian.h` is deleted. The endian tests moved to
 `tests/appwarrior/test_endian.cpp` (40th case added: `four_cc` goldens). Verification: 40/40 pass
 on the gcc, clang and ASan/UBSan presets.
 
-## Recommended next phase
+## Phase 2 — AppWarrior Core: types, bits/align, IVA1 reader, container verdicts
 
-**Phase 2 — AppWarrior Core foundation (continues).** Per AGENTS.md the framework is preserved and
-modernized; with `appwarrior::core` (endian) and `appwarrior::testing` landed, the next increments
-are the typed-integer/`typedefs.h` replacement and the container layer (`CPtrList`/`CLinkedList`/
-`CBoolArray`/`UIDVarArray`/`CPtrTree` verdicts from `audit/01`) reimplemented or replaced per the
-per-container analysis, each with behavioral tests — using the framework's own
-`appwarrior::testing` component. That unblocks server/client modernization (which are AppWarrior
-apps) without touching any platform UI backend. Phase 3 then returns to pure protocol:
-payload structs (`SMyFileInfo`, `SMyUserInfo`, `SMyUserAccess`, dates, GUID) and the
-legacy auth codecs with golden vectors.
+### Delivered code (all in `appwarrior::core`, all tested)
+
+| Modern | Legacy | Notes |
+|---|---|---|
+| `bits.h` — `appwarrior::bits::get/set/clear/invert_bit` | `UMemory::GetBit/SetBit/ClearBit/InvertBit` (`UMemory.h:135-158`) | **MSB-first** order preserved exactly (bit i = byte i/8, bit 7-(i%8)) — `SMyUserAccess` and Phase 3 codecs depend on it. Trap documented: `UBitString` used the opposite LSB-first order. |
+| `align.h` — `appwarrior::align::up/down` (power-of-two, unsigned-integral concept) | `RoundUp2..64` / `RoundDown2..64` macros (`typedefs.h:240-252`) | C++26 will add `std::align_up`; target is C++23. |
+| `ivar_array.h/.cpp` — bounded `'IVA1'` decoder (`decode`/`find`/`item_data`) | `UIDVarArray::Unflatten` + static `GetItem` (`UIDVarArray.cpp:391-473,479-543`) | Read-only by design (assets must stay readable; new needs use `std::map<uint32_t, std::vector<std::byte>>`). Safety validation mirrors the legacy validator; ID ordering is deliberately lenient (see below). |
+
+### typedefs.h replacement verdict (`AppWarrior/Headers/typedefs.h`, 286 LOC)
+
+| Legacy | Replacement | Evidence |
+|---|---|---|
+| `Int8..Uint64`, `Char8/16`, `Float32`, `fast_float` | `<cstdint>` / `float` / `double` directly — no framework aliases (aliases that only obscure standard types are removed) | `Uint32` ≈6,272 matches, `Uint8` ≈3,677 — but every modern consumer names `<cstdint>` types directly |
+| `nil`, `true/false` macros | `nullptr`, built-in keywords | |
+| `min/max/swap/abs/clamp/diff` templates | `std::min/std::max/std::swap/std::abs/std::clamp`; `diff` → `std::abs(a - b)` per use site | |
+| `RANGE(num,min,max)` | `std::in_range<T>(value)` | 1 file |
+| `HiWord/LoWord` macros | explicit `>> 16` / `& 0xFFFF` | 3 / 2 files |
+| `RoundUp/RoundDown2..64` | `appwarrior::align::up/down` | 20 files |
+| `swap_int`, `TB/FB`, `CONVERT_INTS` | `std::byteswap`; `appwarrior::endian` (Phase 2a); byte-order centralization | |
+| `FORCE_CAST`, `BPTR/CPTR/WPTR` | removed — no `reinterpret_cast` overlay (AGENTS.md) | |
+| `operator_new_size_t` hack, `USE_PRE_INCREMENT`, `USES_FILE_EXTENSIONS`, `#undef` blocks | removed — platform configuration lives in the backend layer (later phase) | |
+| `scopekiller`/`scopekill` (RAII delete) | local `std::unique_ptr`/scope guard at each use site; not a framework facility | 29 files |
+| `StValueChanger` (save/restore a variable) | small local RAII type at the use site; not a framework facility | 1 file |
+
+### Container verdicts (implementation = documented replacements, not ports)
+
+Per AGENTS.md ("no blind substitution"; a wrapper that makes `std::vector` look like a 1998
+pointer list is not a framework abstraction), none of these earn a modern AppWarrior container:
+
+| Legacy | App usage | Replacement at future call sites |
+|---|---|---|
+| `CBoolArray` (bit-packed, THdl-backed, single-item Move/Swap only) | ~0 (client header decl only) | **remove-entirely**; `std::vector<bool>`/`std::bitset` if a need ever appears |
+| `CLinkedList`/`CLink` (intrusive, O(n) tail ops) | 9 files (server connection lists, client queues) | `std::list`/`std::deque`, or `std::vector` + swap-remove, per access pattern |
+| `CPtrList`/`CVoidPtrList` (growable pointer array, 1-based, heapsort + binary search, cursor iteration) | 55 files — the workhorse | `std::vector<T>` / `std::vector<std::unique_ptr<T>>`; `std::sort` + `std::lower_bound` for the sorted-search pattern; **drop the 1-based convention**; iteration = range-for (cursor replaced by iterators/indices) |
+| `CPtrTree<T>` (flat level-encoded tree: `{u16 level, u32 childCount, void*}` runs; per-parent O(n²) bubble sort) | 5 files (news/tracker tree models) | explicit node trees (`std::vector<std::unique_ptr<Node>>` per domain). The flat level-encoded layout is **not persisted anywhere** — no format codec needed. Contract notes for the replacements: children follow parent contiguously; `RemoveItem(removeChildTree=false)` promotes the first child; `Sort` orders direct siblings of one parent; level ≤ 65535. |
+| `UIDVarArray` (ID→blob associative array, `'IVA1'` flatten) | 0 direct apps; internal: error-catalog reader | the `'IVA1'` *format* survives as `appwarrior::ivar` (bounded reader); the *container* is replaced by `std::map<uint32_t, std::vector<std::byte>>` for new needs |
+| `UBitString` (LSB-first bit ops) | 0 (only `CBoolArray`) | **remove-entirely**; LSB-first trap documented in `bits.h` |
+
+### New archaeology finding (corrects audit/01)
+
+The shipped catalog `legacy/AppWarrior/Error Msgs/UError(1).dat` **violates its own documented
+sorted-ID invariant**: its offset table is `..., 9, 13, 11, 12, 13` (duplicate ID 13, out of
+order). The legacy `UIDVarArray::Unflatten` would reject it as corrupt; it shipped broken because
+the Windows loader used the non-validating static `UIDVarArray::GetItem` (whose binary search
+then silently mis-looked-up some IDs). Verified byte-for-byte; all 8 shipped catalogs were
+decoded with the modern reader (7 valid + this one anomalous). Consequently the modern decoder
+enforces safety (tag, truncation, count guard, monotonic in-bounds offsets) but is deliberately
+lenient about ID ordering, preserves table order, and `find`/`item_data` return the first match.
+
+### Verification
+
+- `appwarrior::core` is now a STATIC library (first compiled code: `ivar_array.cpp`).
+- 20 new test cases (60 total): bit-order goldens incl. the `SMyUserAccess` privilege-indexing
+  case, alignment goldens, hand-built + **two real shipped catalog goldens** (embedded
+  `UMemory(3).dat` and the anomalous `UError(1).dat`), truncation-prefix sweep, malformed-input
+  cases, leniency cases.
+- Independent sweep: all 8 real `.dat` catalogs decode (see above).
+- gcc, clang and ASan/UBSan presets: 60/60 pass, warnings-as-errors clean.
+
+### Recommended next phase
+
+**Phase 3 — Protocol payloads + legacy auth codecs.** Pure `hotline::protocol` work built on
+`appwarrior::core` (`endian`, `bits`): the field payload structs (`SMyFileInfo`, `SMyUserInfo`,
+`SMyUserAccess` — now with the verified MSB-first bit order —, dates, GUID), and the legacy
+login/auth codecs (bitwise-NOT scramble, `HLCrypt` two-key HMAC schedule, `Perm*Key(n)`) with
+golden vectors per audit/06 §11. Still no platform/UI dependencies; still fully testable with
+`appwarrior::testing`.

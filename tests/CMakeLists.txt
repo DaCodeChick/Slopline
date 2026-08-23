@@ -1,6 +1,9 @@
 add_executable(hotline_protocol_tests
   test_main.cpp
   appwarrior/test_endian.cpp
+  appwarrior/test_bits.cpp
+  appwarrior/test_align.cpp
+  appwarrior/test_ivar.cpp
   protocol/test_constants.cpp
   protocol/test_transaction.cpp
   protocol/test_field_list.cpp

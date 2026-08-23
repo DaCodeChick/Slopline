@@ -563,3 +563,23 @@ There is **no `SwapLong`/`SwapShort`** anywhere in the tree (`grep` = 0). The en
 ---
 
 *End of audit. All paths are under `legacy/`; the report is the sole output and no legacy file was modified.*
+
+---
+
+## Post-audit corrections (implementation Phase 2, verified from source + shipped assets)
+
+1. **Shipped catalog violates its own invariant.** `AppWarrior/Error Msgs/UError(1).dat` has an
+   offset table of `..., 9, 13, 11, 12, 13` — duplicate ID 13 and out-of-order IDs — despite the
+   documented "strictly increasing IDs" rule. `UIDVarArray::Unflatten` would reject it; it shipped
+   broken because the Windows loader path uses the non-validating static `GetItem` (whose binary
+   search then mis-looks-up affected IDs). All other 7 shipped catalogs are valid. The modern
+   `appwarrior::ivar` decoder (Phase 2) therefore validates safety only (tag, truncation,
+   `0xFF000000` count guard, monotonic in-bounds offsets) and is lenient about ID ordering,
+   preserving table order with first-match lookup. See docs/modernization-ledger.md (Phase 2).
+2. **`typedefs.h` usage counts refined:** `scopekill` appears in 29 files (documented as
+   local-scope-guard replacement per use site); `StValueChanger` in 1; `RANGE` in 1; `RoundUp*`
+   in 20 (replaced by `appwarrior::align`); `HiWord`/`LoWord` in 3/2.
+3. **Container verdicts confirmed** by call-site analysis; none retained as framework
+   containers — `CPtrList` (55 files) → `std::vector` + `std::sort`/`std::lower_bound`, 1-based
+   convention dropped; `CPtrTree` (5 files) → per-domain node trees (flat level-encoded layout
+   is not persisted); `UIDVarArray`'s `'IVA1'` *format* survives via `appwarrior::ivar`.

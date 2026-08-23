@@ -970,8 +970,7 @@ documentation updated):
   comments are arithmetic typos. The compiled hex literals (used identically by the tree's client
   and server) are authoritative; Appendix B and `audit/06` have been corrected.
 
-**Implementation status:** Phase 1 of the implementation (build foundation + `hotline::protocol`
-wire codec with golden-vector tests) is complete, and the first modern AppWarrior components have
-since landed — `appwarrior::testing` (the framework's built-in unit-test facility) and
-`appwarrior::core` (`appwarrior::endian`, the centralized big-endian helpers now consumed by
-`hotline::protocol`). See `docs/modernization-ledger.md`.
+**Implementation status:** Phases 1–2 of the implementation are complete: build foundation +
+`hotline::protocol` wire codec (Phase 1); `appwarrior::testing` (Phase 1b); `appwarrior::core`
+with `appwarrior::endian` (Phase 2a) and `bits`/`align`/`ivar` plus the typedefs.h and container
+verdicts (Phase 2) — 60/60 tests across gcc/clang/ASan-UBSan. See `docs/modernization-ledger.md`.
