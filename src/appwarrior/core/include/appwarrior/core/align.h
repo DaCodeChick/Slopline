@@ -11,7 +11,7 @@
 #include <concepts>
 #include <cstdint>
 
-namespace appwarrior::align {
+namespace aw::align {
 
 template <std::unsigned_integral T>
 [[nodiscard]] constexpr auto up(T value, T alignment) noexcept -> T {
@@ -23,4 +23,4 @@ template <std::unsigned_integral T>
   return static_cast<T>(value & ~(alignment - 1));
 }
 
-}  // namespace appwarrior::align
+}  // namespace aw::align

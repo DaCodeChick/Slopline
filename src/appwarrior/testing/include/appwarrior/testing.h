@@ -8,7 +8,7 @@
 // runner — and is deliberately replaceable: nothing outside it depends on
 // its internals.
 //
-// Everything lives in namespace appwarrior::test except the registration
+// Everything lives in namespace aw::test except the registration
 // macros, which genuinely require preprocessing (a TEST_CASE must expand at
 // its declaration site) and are therefore prefixed AW_ — the one case where
 // a prefix is unavoidable, per AGENTS.md ("keep macros only when
@@ -28,7 +28,7 @@
 #include <string_view>
 #include <vector>
 
-namespace appwarrior::test {
+namespace aw::test {
 
 struct Case {
   std::string_view name;
@@ -138,7 +138,7 @@ inline void require_bytes(std::span<const std::byte> actual, std::string_view ex
 // Runs every registered test case; returns 0 when all pass, 1 otherwise.
 // Intended as the body of a test executable's main():
 //
-//   int main() { return appwarrior::test::run_all_tests(); }
+//   int main() { return aw::test::run_all_tests(); }
 inline auto run_all_tests() -> int {
   std::size_t failed = 0;
   for (const Case& test : registry()) {
@@ -160,7 +160,7 @@ inline auto run_all_tests() -> int {
   return failed == 0 ? 0 : 1;
 }
 
-}  // namespace appwarrior::test
+}  // namespace aw::test
 
 // ---------------------------------------------------------------------------
 // Registration macros (AW_-prefixed: macros cannot be namespaced)
@@ -171,19 +171,19 @@ inline auto run_all_tests() -> int {
 
 #define AW_TEST_CASE(name)                                                        \
   static void AW_TEST_CAT(aw_test_fn_, __LINE__)();                               \
-  static ::appwarrior::test::Registrar AW_TEST_CAT(aw_test_reg_, __LINE__)(       \
+  static ::aw::test::Registrar AW_TEST_CAT(aw_test_reg_, __LINE__)(       \
       name, &AW_TEST_CAT(aw_test_fn_, __LINE__));                                 \
   static void AW_TEST_CAT(aw_test_fn_, __LINE__)()
 
 #define AW_CHECK(expression)                                                      \
   do {                                                                            \
     if (!(expression)) {                                                          \
-      ::appwarrior::test::check_failed(#expression);                              \
+      ::aw::test::check_failed(#expression);                              \
     }                                                                             \
   } while (false)
 
-#define AW_FAIL(message) ::appwarrior::test::fail((message))
+#define AW_FAIL(message) ::aw::test::fail((message))
 
-#define AW_REQUIRE_BYTES(actual, hex) ::appwarrior::test::require_bytes((actual), (hex), "")
+#define AW_REQUIRE_BYTES(actual, hex) ::aw::test::require_bytes((actual), (hex), "")
 #define AW_REQUIRE_BYTES_MSG(actual, hex, context) \
-  ::appwarrior::test::require_bytes((actual), (hex), (context))
+  ::aw::test::require_bytes((actual), (hex), (context))

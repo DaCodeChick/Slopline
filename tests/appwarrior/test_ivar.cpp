@@ -7,8 +7,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace appwarrior::ivar;
-using namespace appwarrior::test;
+using namespace aw::ivar;
+using namespace aw::test;
 
 // Hand-built golden: 3 items with IDs 100/101/102 and offsets 0/2/5 (+
 // sentinel 7) over the data "hello!!".

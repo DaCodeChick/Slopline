@@ -9,7 +9,7 @@
 #include "appwarrior/testing.h"
 
 using namespace hotline::protocol;
-using namespace appwarrior::test;
+using namespace aw::test;
 
 // Golden vector (audit/06 §11.1): one field — id 100 (ErrorText), data "x".
 AW_TEST_CASE("golden: single-field body") {

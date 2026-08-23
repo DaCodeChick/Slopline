@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <span>
 
-namespace hotline::crypto {
+namespace aw::crypto {
 
 struct Sha1 {
   static constexpr std::size_t block_size = 64;
@@ -19,4 +19,4 @@ struct Sha1 {
   [[nodiscard]] static auto digest(std::span<const std::byte> message) -> Digest;
 };
 
-}  // namespace hotline::crypto
+}  // namespace aw::crypto

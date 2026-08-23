@@ -52,34 +52,34 @@ static_assert(sizeof(ServerHandshakeReply) == kServerHandshakeReplySize);
 // Fixed-size overloads.
 constexpr void encode_client_handshake(const ClientHandshake& handshake,
                                        std::span<std::byte, kClientHandshakeSize> out) noexcept {
-  appwarrior::endian::write_u32be(handshake.protocol, out.subspan<0, 4>());
-  appwarrior::endian::write_u32be(handshake.sub_protocol, out.subspan<4, 4>());
-  appwarrior::endian::write_u16be(handshake.version, out.subspan<8, 2>());
-  appwarrior::endian::write_u16be(handshake.sub_version, out.subspan<10, 2>());
+  aw::endian::write_u32be(handshake.protocol, out.subspan<0, 4>());
+  aw::endian::write_u32be(handshake.sub_protocol, out.subspan<4, 4>());
+  aw::endian::write_u16be(handshake.version, out.subspan<8, 2>());
+  aw::endian::write_u16be(handshake.sub_version, out.subspan<10, 2>());
 }
 
 [[nodiscard]] constexpr auto decode_client_handshake(
     std::span<const std::byte, kClientHandshakeSize> bytes) noexcept -> ClientHandshake {
   ClientHandshake handshake;
-  handshake.protocol = appwarrior::endian::read_u32be(bytes.subspan<0, 4>());
-  handshake.sub_protocol = appwarrior::endian::read_u32be(bytes.subspan<4, 4>());
-  handshake.version = appwarrior::endian::read_u16be(bytes.subspan<8, 2>());
-  handshake.sub_version = appwarrior::endian::read_u16be(bytes.subspan<10, 2>());
+  handshake.protocol = aw::endian::read_u32be(bytes.subspan<0, 4>());
+  handshake.sub_protocol = aw::endian::read_u32be(bytes.subspan<4, 4>());
+  handshake.version = aw::endian::read_u16be(bytes.subspan<8, 2>());
+  handshake.sub_version = aw::endian::read_u16be(bytes.subspan<10, 2>());
   return handshake;
 }
 
 constexpr void encode_server_handshake_reply(
     const ServerHandshakeReply& reply,
     std::span<std::byte, kServerHandshakeReplySize> out) noexcept {
-  appwarrior::endian::write_u32be(reply.protocol, out.subspan<0, 4>());
-  appwarrior::endian::write_u32be(reply.error, out.subspan<4, 4>());
+  aw::endian::write_u32be(reply.protocol, out.subspan<0, 4>());
+  aw::endian::write_u32be(reply.error, out.subspan<4, 4>());
 }
 
 [[nodiscard]] constexpr auto decode_server_handshake_reply(
     std::span<const std::byte, kServerHandshakeReplySize> bytes) noexcept -> ServerHandshakeReply {
   ServerHandshakeReply reply;
-  reply.protocol = appwarrior::endian::read_u32be(bytes.subspan<0, 4>());
-  reply.error = appwarrior::endian::read_u32be(bytes.subspan<4, 4>());
+  reply.protocol = aw::endian::read_u32be(bytes.subspan<0, 4>());
+  reply.error = aw::endian::read_u32be(bytes.subspan<4, 4>());
   return reply;
 }
 

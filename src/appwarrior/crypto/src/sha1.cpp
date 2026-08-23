@@ -1,10 +1,10 @@
-#include "hotline/crypto/sha1.h"
+#include "appwarrior/crypto/sha1.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace hotline::crypto {
+namespace aw::crypto {
 
 namespace {
 
@@ -129,4 +129,4 @@ auto Sha1::digest(std::span<const std::byte> message) -> Digest {
   return out;
 }
 
-}  // namespace hotline::crypto
+}  // namespace aw::crypto

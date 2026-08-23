@@ -23,7 +23,7 @@
 #include <cstdint>
 #include <span>
 
-namespace appwarrior::bits {
+namespace aw::bits {
 
 [[nodiscard]] constexpr auto get_bit(std::span<const std::byte> data,
                                      std::uint32_t index) noexcept -> bool {
@@ -57,4 +57,4 @@ constexpr void set_bit(std::span<std::byte> data, std::uint32_t index, bool valu
   }
 }
 
-}  // namespace appwarrior::bits
+}  // namespace aw::bits

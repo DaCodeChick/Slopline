@@ -1,4 +1,4 @@
-#include "hotline/crypto/md5.h"
+#include "appwarrior/crypto/md5.h"
 
 #include <cstddef>
 #include <span>
@@ -6,8 +6,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace hotline::crypto;
-using namespace appwarrior::test;
+using namespace aw::crypto;
+using namespace aw::test;
 
 AW_TEST_CASE("MD5: RFC 1321 test vectors") {
   AW_REQUIRE_BYTES(Md5::digest({}), "d4 1d 8c d9 8f 00 b2 04 e9 80 09 98 ec f8 42 7e");

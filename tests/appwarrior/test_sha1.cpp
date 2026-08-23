@@ -1,4 +1,4 @@
-#include "hotline/crypto/sha1.h"
+#include "appwarrior/crypto/sha1.h"
 
 #include <cstddef>
 #include <span>
@@ -6,8 +6,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace hotline::crypto;
-using namespace appwarrior::test;
+using namespace aw::crypto;
+using namespace aw::test;
 
 AW_TEST_CASE("SHA-1: FIPS 180-1 test vectors") {
   AW_REQUIRE_BYTES(Sha1::digest({}), "da 39 a3 ee 5e 6b 4b 0d 32 55 bf ef 95 60 18 90 af d8 07 09");

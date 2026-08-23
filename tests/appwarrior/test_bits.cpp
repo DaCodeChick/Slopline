@@ -6,8 +6,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace appwarrior::bits;
-using namespace appwarrior::test;
+using namespace aw::bits;
+using namespace aw::test;
 
 AW_TEST_CASE("MSB-first order: bit 0 is the MSB of byte 0") {
   std::array<std::byte, 1> data{};

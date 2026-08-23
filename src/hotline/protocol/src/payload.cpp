@@ -10,14 +10,14 @@
 
 namespace hotline::protocol {
 
-using appwarrior::endian::read_u16be;
-using appwarrior::endian::read_u32be;
-using appwarrior::endian::read_u32le;
-using appwarrior::endian::read_u64be;
-using appwarrior::endian::write_u16be;
-using appwarrior::endian::write_u32be;
-using appwarrior::endian::write_u32le;
-using appwarrior::endian::write_u64be;
+using aw::endian::read_u16be;
+using aw::endian::read_u32be;
+using aw::endian::read_u32le;
+using aw::endian::read_u64be;
+using aw::endian::write_u16be;
+using aw::endian::write_u32be;
+using aw::endian::write_u32le;
+using aw::endian::write_u64be;
 
 namespace {
 
@@ -156,16 +156,6 @@ auto try_decode_date_time_stamp(std::span<const std::byte> bytes)
     return std::unexpected(DecodeError::trailing_bytes);
   }
   return decode_date_time_stamp(bytes.first<kDateTimeStampSize>());
-}
-
-auto try_decode_guid(std::span<const std::byte> bytes) -> std::expected<Guid, DecodeError> {
-  if (bytes.size() < kGuidSize) {
-    return std::unexpected(DecodeError::truncated);
-  }
-  if (bytes.size() > kGuidSize) {
-    return std::unexpected(DecodeError::trailing_bytes);
-  }
-  return decode_guid(bytes.first<kGuidSize>());
 }
 
 }  // namespace hotline::protocol

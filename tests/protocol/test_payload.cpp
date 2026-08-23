@@ -10,12 +10,12 @@
 #include "appwarrior/testing.h"
 
 using namespace hotline::protocol;
-using namespace appwarrior::test;
+using namespace aw::test;
 
 AW_TEST_CASE("FileInfo: golden encode with the legacy-Intel endianness quirk") {
   FileInfo info;
-  info.type = appwarrior::endian::four_cc('T', 'E', 'X', 'T');
-  info.creator = appwarrior::endian::four_cc('t', 't', 'x', 't');
+  info.type = aw::endian::four_cc('T', 'E', 'X', 'T');
+  info.creator = aw::endian::four_cc('t', 't', 'x', 't');
   info.file_size = 0x12345678U;
   info.name = "a.txt";
 
@@ -148,28 +148,3 @@ AW_TEST_CASE("DateTimeStamp: golden 8-byte big-endian form") {
   AW_CHECK(truncated.error() == DecodeError::truncated);
 }
 
-AW_TEST_CASE("Guid: golden 16-byte Microsoft UUID network form") {
-  Guid guid;
-  guid.time_low = 0x11223344U;
-  guid.time_mid = 0x5566;
-  guid.time_hi_and_version = 0x7788;
-  guid.clock_seq_hi_and_reserved = 0x99;
-  guid.clock_seq_low = 0xAA;
-  guid.node = {1, 2, 3, 4, 5, 6};
-
-  std::array<std::byte, kGuidSize> encoded{};
-  encode_guid(guid, encoded);
-  AW_REQUIRE_BYTES(encoded, "11 22 33 44 55 66 77 88 99 aa 01 02 03 04 05 06");
-
-  const auto decoded = try_decode_guid(encoded);
-  AW_CHECK(decoded.has_value());
-  AW_CHECK(*decoded == guid);
-
-  const auto truncated = try_decode_guid(bytes_from_hex("11 22 33 44 55 66"));
-  AW_CHECK(!truncated.has_value());
-  AW_CHECK(truncated.error() == DecodeError::truncated);
-  const auto trailing = try_decode_guid(
-      bytes_from_hex("11 22 33 44 55 66 77 88 99 aa 01 02 03 04 05 06 00"));
-  AW_CHECK(!trailing.has_value());
-  AW_CHECK(trailing.error() == DecodeError::trailing_bytes);
-}

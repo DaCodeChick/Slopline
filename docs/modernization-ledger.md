@@ -273,6 +273,33 @@ affects code that interpreted the two u32 *values* numerically across hosts. The
 - Login lowercasing and `\r`→`-` replacement are text-encoding-aware (UText::MakeLowercase);
   they land with the text layer.
 
+---
+
+## Phase 3c — `aw` namespace + framework/general-purpose promotions
+
+**Naming (C++ only):** the framework namespace is now the short prefix **`aw`** — `aw::endian`,
+`aw::bits`, `aw::align`, `aw::ivar`, `aw::test`, `aw::crypto`, `aw::guid`, plus `aw::DecodeError`
+at the root. The framework *name* remains **AppWarrior** (AGENTS.md charter); CMake target names
+stay `appwarrior::core` / `appwarrior::crypto` / `appwarrior::testing` (build graph tracks the
+framework name); the test macros stay `AW_`-prefixed (macros cannot be namespaced). Rationale:
+`aw` is the code-level brevity the same way the historical code leaned on `U`/`C` prefixes —
+scoping is handled by the namespace, so the prefix stays short.
+
+**Promotions into AppWarrior (general-purpose, not Hotline-specific):**
+
+| Facility | New home | Hotline side |
+|---|---|---|
+| MD5, SHA-1, generic RFC 2104 HMAC + `message_digest` concept | `appwarrior/crypto/` — `aw::crypto` (new `appwarrior::crypto` library; the old `hotline::crypto` library is **deleted**) | — |
+| `Guid` (Microsoft UUID network form codec) | `appwarrior/core/guid.h` — `aw::guid::Guid` | news GUID field (319) consumers use the framework type directly |
+| `DecodeError` (truncated / trailing_bytes / invalid_integer_field_size) | `appwarrior/core/decode_error.h` — `aw::DecodeError` | `hotline/protocol/decode_error.h` re-exports it as `hotline::protocol::DecodeError` (one shared decode-error vocabulary) |
+| Login key schedule (`HLCrypt::Init` t1/t2, `Perm*Key`) | — (it IS Hotline-specific) | `hotline/protocol/key_schedule.h` — `hotline::protocol::auth::derive_login_keys/permute_key`, templates over `aw::crypto::message_digest` |
+
+`hotline::protocol` now links `appwarrior::core` + `appwarrior::crypto` (public). Blowfish will
+land in `aw::crypto` in Phase 3b; the encrypted-transaction stream stays Hotline.
+
+**Verification:** unchanged behavior — all 81 cases pass on gcc, clang and ASan/UBSan presets
+after the restructure (pure rename/promotion; no semantic edits).
+
 ### Recommended next phase
 
 **Phase 3b — Crypto completion.** Finish the protocol-crypto spine: Blowfish OFB-64 (zero IV,

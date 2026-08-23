@@ -54,11 +54,11 @@ constexpr void encode_header(const TransactionHeader& header,
                              std::span<std::byte, kTransactionHeaderSize> out) noexcept {
   out[0] = static_cast<std::byte>(header.flag);
   out[1] = static_cast<std::byte>(header.is_reply);
-  appwarrior::endian::write_u16be(static_cast<std::uint16_t>(header.type), out.subspan<2, 2>());
-  appwarrior::endian::write_u32be(header.id, out.subspan<4, 4>());
-  appwarrior::endian::write_u32be(header.error, out.subspan<8, 4>());
-  appwarrior::endian::write_u32be(header.total_size, out.subspan<12, 4>());
-  appwarrior::endian::write_u32be(header.data_size, out.subspan<16, 4>());
+  aw::endian::write_u16be(static_cast<std::uint16_t>(header.type), out.subspan<2, 2>());
+  aw::endian::write_u32be(header.id, out.subspan<4, 4>());
+  aw::endian::write_u32be(header.error, out.subspan<8, 4>());
+  aw::endian::write_u32be(header.total_size, out.subspan<12, 4>());
+  aw::endian::write_u32be(header.data_size, out.subspan<16, 4>());
 }
 
 [[nodiscard]] constexpr auto decode_header(
@@ -66,11 +66,11 @@ constexpr void encode_header(const TransactionHeader& header,
   TransactionHeader header;
   header.flag = std::to_integer<std::uint8_t>(bytes[0]);
   header.is_reply = std::to_integer<std::uint8_t>(bytes[1]);
-  header.type = static_cast<TransactionType>(appwarrior::endian::read_u16be(bytes.subspan<2, 2>()));
-  header.id = appwarrior::endian::read_u32be(bytes.subspan<4, 4>());
-  header.error = appwarrior::endian::read_u32be(bytes.subspan<8, 4>());
-  header.total_size = appwarrior::endian::read_u32be(bytes.subspan<12, 4>());
-  header.data_size = appwarrior::endian::read_u32be(bytes.subspan<16, 4>());
+  header.type = static_cast<TransactionType>(aw::endian::read_u16be(bytes.subspan<2, 2>()));
+  header.id = aw::endian::read_u32be(bytes.subspan<4, 4>());
+  header.error = aw::endian::read_u32be(bytes.subspan<8, 4>());
+  header.total_size = aw::endian::read_u32be(bytes.subspan<12, 4>());
+  header.data_size = aw::endian::read_u32be(bytes.subspan<16, 4>());
   return header;
 }
 

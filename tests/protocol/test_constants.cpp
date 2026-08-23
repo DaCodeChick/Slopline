@@ -3,7 +3,7 @@
 #include "appwarrior/testing.h"
 
 using namespace hotline::protocol;
-using namespace appwarrior::test;
+using namespace aw::test;
 
 AW_TEST_CASE("transaction IDs match the historical table") {
   AW_CHECK(static_cast<std::uint16_t>(TransactionType::Error) == 100);
@@ -59,7 +59,7 @@ AW_TEST_CASE("access privilege bit positions match the historical table") {
 }
 
 AW_TEST_CASE("protocol tags, versions and wire sizes") {
-  AW_CHECK(appwarrior::endian::four_cc('T', 'R', 'T', 'P') == 0x54525450U);
+  AW_CHECK(aw::endian::four_cc('T', 'R', 'T', 'P') == 0x54525450U);
   AW_CHECK(kProtocolTrTp == 0x54525450U);
   AW_CHECK(kProtocolNick == 0x4E49434BU);
   AW_CHECK(kSubProtocolHotl == 0x484F544CU);

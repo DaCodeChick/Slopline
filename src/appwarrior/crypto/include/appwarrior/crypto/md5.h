@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <span>
 
-namespace hotline::crypto {
+namespace aw::crypto {
 
 struct Md5 {
   static constexpr std::size_t block_size = 64;
@@ -21,4 +21,4 @@ struct Md5 {
   [[nodiscard]] static auto digest(std::span<const std::byte> message) -> Digest;
 };
 
-}  // namespace hotline::crypto
+}  // namespace aw::crypto

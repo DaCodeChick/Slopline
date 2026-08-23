@@ -82,7 +82,7 @@ struct UserInfo {
 // Legacy: SMyUserAccess {Uint32 data[2]} (HotlineClientServerCommon.h),
 // sent as a raw 8-byte struct copy (HotlineServTrans.cpp:3262; the client
 // likewise — HotlineTasks.cpp:4988/5119). Privilege p is bit 7-(p%8) of
-// wire byte p/8 (UMemory::SetBit order == appwarrior::bits), which makes
+// wire byte p/8 (UMemory::SetBit order == aw::bits), which makes
 // the WIRE BYTES host-independent: both the legacy Mac and Intel builds
 // emitted identical bytes for the same privilege set. The historical
 // "endianness hazard" only affects interpreting the two u32 VALUES across
@@ -131,14 +131,14 @@ static_assert(sizeof(AccessMask) == kAccessMaskSize);
 
 constexpr void encode_access_mask(const AccessMask& mask,
                                   std::span<std::byte, kAccessMaskSize> out) noexcept {
-  appwarrior::endian::write_u64be(mask.bits(), out);
+  aw::endian::write_u64be(mask.bits(), out);
 }
 
 [[nodiscard]] constexpr auto decode_access_mask(
     std::span<const std::byte, kAccessMaskSize> bytes) noexcept -> AccessMask {
   // Privilege p is bit (63-p) of the big-endian 64-bit reading of the wire
   // bytes (see the AccessMask docs above).
-  return AccessMask{appwarrior::endian::read_u64be(bytes)};
+  return AccessMask{aw::endian::read_u64be(bytes)};
 }
 
 [[nodiscard]] auto try_decode_access_mask(std::span<const std::byte> bytes)
@@ -167,74 +167,24 @@ static_assert(sizeof(DateTimeStamp) == kDateTimeStampSize);
 
 constexpr void encode_date_time_stamp(const DateTimeStamp& stamp,
                                       std::span<std::byte, kDateTimeStampSize> out) noexcept {
-  appwarrior::endian::write_u16be(stamp.year, out.first<2>());
-  appwarrior::endian::write_u16be(stamp.msecs, out.subspan<2>().first<2>());
-  appwarrior::endian::write_u32be(stamp.seconds, out.subspan<4>().first<4>());
+  aw::endian::write_u16be(stamp.year, out.first<2>());
+  aw::endian::write_u16be(stamp.msecs, out.subspan<2>().first<2>());
+  aw::endian::write_u32be(stamp.seconds, out.subspan<4>().first<4>());
 }
 
 [[nodiscard]] constexpr auto decode_date_time_stamp(
     std::span<const std::byte, kDateTimeStampSize> bytes) noexcept -> DateTimeStamp {
   DateTimeStamp stamp;
-  stamp.year = appwarrior::endian::read_u16be(bytes.first<2>());
-  stamp.msecs = appwarrior::endian::read_u16be(bytes.subspan<2>().first<2>());
-  stamp.seconds = appwarrior::endian::read_u32be(bytes.subspan<4>().first<4>());
+  stamp.year = aw::endian::read_u16be(bytes.first<2>());
+  stamp.msecs = aw::endian::read_u16be(bytes.subspan<2>().first<2>());
+  stamp.seconds = aw::endian::read_u32be(bytes.subspan<4>().first<4>());
   return stamp;
 }
 
 [[nodiscard]] auto try_decode_date_time_stamp(std::span<const std::byte> bytes)
     -> std::expected<DateTimeStamp, DecodeError>;
 
-// ---------------------------------------------------------------------------
-// Guid — news category identifiers (myField_NewsCatGUID, 319)
-//
-// Legacy: SGUID (AppWarrior/Headers/UGUID.h) flattened by UGUID::Flatten
-// (UGUID(W).cpp:63-75): time_low u32 BE, time_mid u16 BE,
-// time_hi_and_version u16 BE, then clock_seq_hi_and_reserved,
-// clock_seq_low and node[6] as raw bytes — 16 bytes total (the Microsoft
-// UUID network form).
-// ---------------------------------------------------------------------------
-
-inline constexpr std::size_t kGuidSize = 16;
-
-struct Guid {
-  std::uint32_t time_low = 0;
-  std::uint16_t time_mid = 0;
-  std::uint16_t time_hi_and_version = 0;
-  std::uint8_t clock_seq_hi_and_reserved = 0;
-  std::uint8_t clock_seq_low = 0;
-  std::array<std::uint8_t, 6> node{};
-
-  friend constexpr auto operator==(const Guid&, const Guid&) -> bool = default;
-};
-
-static_assert(sizeof(Guid) == kGuidSize);
-
-constexpr void encode_guid(const Guid& guid, std::span<std::byte, kGuidSize> out) noexcept {
-  appwarrior::endian::write_u32be(guid.time_low, out.first<4>());
-  appwarrior::endian::write_u16be(guid.time_mid, out.subspan<4>().first<2>());
-  appwarrior::endian::write_u16be(guid.time_hi_and_version, out.subspan<6>().first<2>());
-  out[8] = static_cast<std::byte>(guid.clock_seq_hi_and_reserved);
-  out[9] = static_cast<std::byte>(guid.clock_seq_low);
-  for (std::size_t i = 0; i < guid.node.size(); ++i) {
-    out[10 + i] = static_cast<std::byte>(guid.node[i]);
-  }
-}
-
-[[nodiscard]] constexpr auto decode_guid(std::span<const std::byte, kGuidSize> bytes) noexcept
-    -> Guid {
-  Guid guid;
-  guid.time_low = appwarrior::endian::read_u32be(bytes.first<4>());
-  guid.time_mid = appwarrior::endian::read_u16be(bytes.subspan<4>().first<2>());
-  guid.time_hi_and_version = appwarrior::endian::read_u16be(bytes.subspan<6>().first<2>());
-  guid.clock_seq_hi_and_reserved = std::to_integer<std::uint8_t>(bytes[8]);
-  guid.clock_seq_low = std::to_integer<std::uint8_t>(bytes[9]);
-  for (std::size_t i = 0; i < guid.node.size(); ++i) {
-    guid.node[i] = std::to_integer<std::uint8_t>(bytes[10 + i]);
-  }
-  return guid;
-}
-
-[[nodiscard]] auto try_decode_guid(std::span<const std::byte> bytes)
-    -> std::expected<Guid, DecodeError>;
+// Note: news category GUIDs (myField_NewsCatGUID, 319) are framework-level —
+// the type and its codec live in appwarrior/core/guid.h (aw::guid::Guid).
 
 }  // namespace hotline::protocol

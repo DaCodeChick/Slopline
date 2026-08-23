@@ -7,7 +7,7 @@
 #include "appwarrior/testing.h"
 
 using namespace hotline::protocol::auth;
-using namespace appwarrior::test;
+using namespace aw::test;
 
 AW_TEST_CASE("scramble: bitwise-NOT, self-inverse (legacy login obfuscation)") {
   const std::vector<std::byte> login = bytes_from_ascii("Hotline");

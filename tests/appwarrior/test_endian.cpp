@@ -8,8 +8,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace appwarrior::endian;
-using namespace appwarrior::test;
+using namespace aw::endian;
+using namespace aw::test;
 
 AW_TEST_CASE("u16/u32 big-endian golden encodings") {
   std::array<std::byte, 2> w16{};

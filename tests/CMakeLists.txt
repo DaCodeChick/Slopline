@@ -4,17 +4,19 @@ add_executable(hotline_protocol_tests
   appwarrior/test_bits.cpp
   appwarrior/test_align.cpp
   appwarrior/test_ivar.cpp
-  crypto/test_md5.cpp
-  crypto/test_sha1.cpp
-  crypto/test_hmac.cpp
+  appwarrior/test_md5.cpp
+  appwarrior/test_sha1.cpp
+  appwarrior/test_hmac.cpp
+  appwarrior/test_guid.cpp
   protocol/test_constants.cpp
   protocol/test_transaction.cpp
   protocol/test_field_list.cpp
   protocol/test_handshake.cpp
   protocol/test_payload.cpp
   protocol/test_auth.cpp
+  protocol/test_key_schedule.cpp
 )
-target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol hotline::crypto
+target_link_libraries(hotline_protocol_tests PRIVATE hotline::protocol appwarrior::crypto
                                                       appwarrior::testing appwarrior::core)
 
 hotline_enable_warnings(hotline_protocol_tests)

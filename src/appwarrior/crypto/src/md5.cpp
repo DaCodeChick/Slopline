@@ -1,10 +1,10 @@
-#include "hotline/crypto/md5.h"
+#include "appwarrior/crypto/md5.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace hotline::crypto {
+namespace aw::crypto {
 
 namespace {
 
@@ -139,4 +139,4 @@ auto Md5::digest(std::span<const std::byte> message) -> Digest {
   return out;
 }
 
-}  // namespace hotline::crypto
+}  // namespace aw::crypto

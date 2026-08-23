@@ -9,7 +9,7 @@
 #include "appwarrior/testing.h"
 
 using namespace hotline::protocol;
-using namespace appwarrior::test;
+using namespace aw::test;
 
 // Golden vector: an empty KeepConnectionAlive request as sent by the
 // historical client (audit/06 §11.1) — flag=0, isReply=0, type=500, id=1,

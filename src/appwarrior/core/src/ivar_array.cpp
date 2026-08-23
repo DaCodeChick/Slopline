@@ -6,18 +6,18 @@
 
 #include "appwarrior/core/endian.h"
 
-namespace appwarrior::ivar {
+namespace aw::ivar {
 
 auto decode(std::span<const std::byte> bytes) -> std::expected<Array, DecodeError> {
   if (bytes.size() < kMinSize) {
     return std::unexpected(DecodeError::truncated);
   }
-  if (appwarrior::endian::read_u32be(bytes.first<4>()) != kFormatTag) {
+  if (aw::endian::read_u32be(bytes.first<4>()) != kFormatTag) {
     return std::unexpected(DecodeError::wrong_format_tag);
   }
 
   const std::uint32_t item_count =
-      appwarrior::endian::read_u32be(bytes.subspan(12).first<4>());
+      aw::endian::read_u32be(bytes.subspan(12).first<4>());
   if ((item_count & 0xFF000000U) != 0) {
     return std::unexpected(DecodeError::impossible_item_count);
   }
@@ -42,7 +42,7 @@ auto decode(std::span<const std::byte> bytes) -> std::expected<Array, DecodeErro
   for (std::uint32_t i = 0; i <= item_count; ++i) {
     const std::span<const std::byte> entry =
         table.subspan(static_cast<std::size_t>(i) * 8U).first<8>();
-    const std::uint32_t offset = appwarrior::endian::read_u32be(entry.subspan(4).first<4>());
+    const std::uint32_t offset = aw::endian::read_u32be(entry.subspan(4).first<4>());
     if (offset < previous_offset || offset > data.size()) {
       return std::unexpected(DecodeError::offset_out_of_range);
     }
@@ -52,12 +52,12 @@ auto decode(std::span<const std::byte> bytes) -> std::expected<Array, DecodeErro
 
   // Second pass: slice the items.
   Array array;
-  array.text_encoding = appwarrior::endian::read_u32be(bytes.subspan(8).first<4>());
+  array.text_encoding = aw::endian::read_u32be(bytes.subspan(8).first<4>());
   array.items.reserve(item_count);
 
   for (std::uint32_t i = 0; i < item_count; ++i) {
     const std::uint32_t id =
-        appwarrior::endian::read_u32be(table.subspan(static_cast<std::size_t>(i) * 8U).first<4>());
+        aw::endian::read_u32be(table.subspan(static_cast<std::size_t>(i) * 8U).first<4>());
 
     const std::size_t begin = static_cast<std::size_t>(offsets[i]);
     const std::size_t end = static_cast<std::size_t>(offsets[static_cast<std::size_t>(i) + 1U]);
@@ -86,4 +86,4 @@ auto item_data(const Array& array, std::uint32_t id) noexcept -> std::span<const
   return item != nullptr ? std::span<const std::byte>(item->data) : std::span<const std::byte>{};
 }
 
-}  // namespace appwarrior::ivar
+}  // namespace aw::ivar

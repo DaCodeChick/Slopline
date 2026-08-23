@@ -4,8 +4,8 @@
 
 #include "appwarrior/testing.h"
 
-using namespace appwarrior::align;
-using namespace appwarrior::test;
+using namespace aw::align;
+using namespace aw::test;
 
 AW_TEST_CASE("round up to power-of-two alignment") {
   AW_CHECK(up(0U, 8U) == 0U);

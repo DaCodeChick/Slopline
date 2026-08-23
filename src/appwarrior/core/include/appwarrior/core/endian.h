@@ -21,7 +21,7 @@
 #include <cstdint>
 #include <span>
 
-namespace appwarrior::endian {
+namespace aw::endian {
 
 [[nodiscard]] constexpr auto read_u16be(std::span<const std::byte, 2> bytes) noexcept
     -> std::uint16_t {
@@ -87,4 +87,4 @@ constexpr void write_u32le(std::uint32_t value, std::span<std::byte, 4> out) noe
          static_cast<std::uint32_t>(static_cast<unsigned char>(c3));
 }
 
-}  // namespace appwarrior::endian
+}  // namespace aw::endian

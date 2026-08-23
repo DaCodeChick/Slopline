@@ -39,9 +39,9 @@
 
 #include "appwarrior/core/endian.h"
 
-namespace appwarrior::ivar {
+namespace aw::ivar {
 
-inline constexpr std::uint32_t kFormatTag = appwarrior::endian::four_cc('I', 'V', 'A', '1');
+inline constexpr std::uint32_t kFormatTag = aw::endian::four_cc('I', 'V', 'A', '1');
 inline constexpr std::size_t kMinSize = 16 + 8;  // header + one table entry
 
 static_assert(kMinSize == 24);
@@ -74,4 +74,4 @@ struct Array {
 [[nodiscard]] auto item_data(const Array& array, std::uint32_t id) noexcept
     -> std::span<const std::byte>;
 
-}  // namespace appwarrior::ivar
+}  // namespace aw::ivar
