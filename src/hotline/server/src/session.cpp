@@ -1,7 +1,4 @@
-#include "hotline/net/session.h"
-
-#if HOTLINE_BUILD_SERVER
-
+#include "hotline/server/session.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +6,7 @@
 
 #include "hotline/protocol/auth.h"
 
-namespace hotline::net {
+namespace hotline::server {
 
 using namespace hotline::protocol;
 
@@ -129,6 +126,4 @@ auto Session::login() const noexcept -> const std::string& { return login_; }
 
 void Session::close() noexcept { state_ = SessionState::closed; }
 
-}  // namespace hotline::net
-
-#endif  // HOTLINE_BUILD_SERVER
+}  // namespace hotline::server

@@ -21,6 +21,7 @@ phase. Charter: `AGENTS.md`. Archaeology: `HOTLINE_MODERNIZATION_REPORT.md` + `a
 | 5 | Networking (aw::net transport, hotline::net connection + login session) | **Complete** |
 | 5a | Networking follow-ups (WinSock, IPv6, AW_API, role-split connections) | **Complete** |
 | 5b | Component gating (BUILD_CLIENT/BUILD_SERVER/BUILD_TRACKER) + UDP transport | **Complete** |
+| 5c | Client/Server application project split (base stays in hotline::net) | **Complete** |
 | 6 | Server core (listeners, dispatch, user/news DBs, agreement/banner) | Recommended next |
 
 
@@ -585,7 +586,9 @@ Two project decisions delivered together:
    protocol). New presets `client-only` and `server-only` verify both gated
    configurations; the net test suite is itself role-gated (both-role tests require both
    switches, plus dedicated client-role and server-role cases), so every configuration
-   compiles and runs a meaningful subset.
+   compiles and runs a meaningful subset. (Superseded in Phase 5c: the role code moved
+   into real client/server application projects and the preprocessor switches were
+   removed in favor of project-level gating.)
 2. **UDP transport in `aw::net`.** `Socket::create_udp(family)` (non-blocking datagram
    sockets, dual-stack IPv6), `Socket::bind(address)` (port 0 → ephemeral, query via
    `local_address()`), `Socket::send_to(destination, buffer)`, and
@@ -600,6 +603,38 @@ Two project decisions delivered together:
 zero-length datagram, would-block/closed-socket error mapping, IPv6 loopback exchange when
 available) — 133 + 16 tests pass on gcc, clang, ASan/UBSan, static, modular,
 static-modular, client-only, and server-only.
+
+## Phase 5c — Client/Server application project split
+
+Per project decision, the role code left `hotline::net` for real application projects:
+
+- **`hotline::net` now holds only the role-neutral connection base.** `ConnectionBase`
+  (abstract, public) carries everything shared: transaction framing, multi-part
+  reassembly, the historical receive policy, encrypted-transaction hooks, the send
+  queue, and readiness servicing. Its single virtual extension point is
+  `handle_handshake()`; `expected_bytes_`/`inbound_`/`queue_bytes`/`mark_established`/
+  `mark_dead` are protected for the derived roles.
+- **`src/hotline/client` (new application project, `hotline::client`)** —
+  `ClientConnection final : ConnectionBase`, with only the client establish path
+  (`start(socket, sub_protocol, sub_version)`: send 'TRTP'/'HOTL' or 'HTXF' version 1,
+  validate the server's 8-byte reply).
+- **`src/hotline/server` (new application project, `hotline::server`)** —
+  `ServerConnection final : ConnectionBase` (accept 'TRTP'/'NICK', reply, record remote
+  sub-protocol/version, reject version != 1 with reason 1) plus the login `Session`
+  state machine (moved from hotline::net; namespace `hotline::server`).
+- **Gating is now project-level.** The `HOTLINE_BUILD_CLIENT`/`HOTLINE_BUILD_SERVER`
+  preprocessor switches and the pimpl wrapper layer are gone: `BUILD_CLIENT` /
+  `BUILD_SERVER` decide which subdirectories CMake adds at all, and the role tests are
+  gated in the CMake source lists (`test_client.cpp` with BUILD_CLIENT,
+  `test_server.cpp`+`test_session.cpp` with BUILD_SERVER, `test_both.cpp` with both).
+  A client-only binary contains no server establish path and no login machine, and
+  vice versa — structurally, with no preprocessor involved.
+
+**Verification:** the net suite is now 4 files; `test_base.cpp` (always built) adds a
+test-local 4-byte-"ping" role proving ConnectionBase is subclassable outside the
+application projects and covers the base round-trip, keepalive bytes, receive policy,
+and peer-close signal. 133 + 19 tests pass on gcc, clang, ASan/UBSan, static, modular,
+static-modular; 133 + 4 on client-only; 133 + 13 on server-only.
 
 ### Recommended next phase
 

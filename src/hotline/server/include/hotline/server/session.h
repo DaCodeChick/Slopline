@@ -1,4 +1,4 @@
-// Hotline networking: login session state machine.
+// Hotline server application: login session state machine.
 //
 // The server-side login/agreement choreography extracted from
 // ProcessTran_Login (HotlineServTrans.cpp:1605-1700, :1886-1900) and
@@ -35,14 +35,9 @@
 #include "hotline/protocol/field_list.h"
 #include "hotline/protocol/payload.h"
 
-#if !defined(HOTLINE_BUILD_SERVER)
-#define HOTLINE_BUILD_SERVER 0
-#endif
+namespace hotline::server {
 
-#if HOTLINE_BUILD_SERVER
-
-namespace hotline::net {
-
+using hotline::net::ReceivedTransaction;
 using protocol::AccessMask;
 using protocol::FieldList;
 
@@ -94,6 +89,4 @@ class Session {
   AccessMask access_;
 };
 
-}  // namespace hotline::net
-
-#endif  // HOTLINE_BUILD_SERVER
+}  // namespace hotline::server

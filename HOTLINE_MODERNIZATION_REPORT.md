@@ -987,6 +987,10 @@ Windows exports (Phase 4c); aw::net transport + the Hotline connection/session l
 (Phase 5); WinSock conditional compilation, IPv6 transport, AW_API on IpAddress, and the
 structural ClientConnection/ServerConnection role split (Phase 5a); BUILD_CLIENT /
 BUILD_SERVER / BUILD_TRACKER component gating plus UDP transport (`create_udp`/`bind`/
-`send_to`/`receive_from` with zero-length datagram support) (Phase 5b) — 133 + 16 tests
-across eight build configurations including the gated client-only and server-only presets.
-See `docs/modernization-ledger.md`.
+`send_to`/`receive_from` with zero-length datagram support) (Phase 5b); the client/server
+application project split — the role-neutral `ConnectionBase` stays in `hotline::net`,
+`ClientConnection` lives in the client application project (`hotline::client`) and
+`ServerConnection` + the login `Session` in the server application project
+(`hotline::server`), gated at the project level with the preprocessor switches removed
+(Phase 5c) — 133 + 19 tests across eight build configurations including the gated
+client-only and server-only presets. See `docs/modernization-ledger.md`.

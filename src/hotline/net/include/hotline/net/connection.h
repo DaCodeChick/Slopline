@@ -1,15 +1,18 @@
-// Hotline networking: connection state machines.
+// Hotline networking: the shared connection base.
 //
-// The UTransact replacement, split by role so the Hotline client links a
-// client-only API and the Hotline server a server-only API (neither
-// application carries the other role's entry point). Both classes share a
-// private connection core.
+// The role-neutral half of the UTransact replacement: transaction
+// framing, multi-part reassembly, the historical receive policy,
+// encrypted-transaction hooks, the send queue, and readiness servicing.
+// Application code never instantiates ConnectionBase — the Hotline
+// client derives ClientConnection from it (src/hotline/client) and the
+// server derives ServerConnection (src/hotline/server), so each
+// application project carries exactly one role's establish path and
+// neither role's start entry point exists in the other's binary.
 //
 // Preserved legacy behavior (verified against UTransact.cpp):
-//  * client handshake: 'TRTP' 'HOTL'/'HTXF' version 1 subVersion 2/3;
-//  * server accepts 'TRTP' or the legacy 'NICK' alias, replies
-//    'TRTP' + error 0, and rejects version != 1 with reason 1;
 //  * the client treats a reply error != 0 as version-unknown and closes;
+//    the server accepts 'TRTP' or the legacy 'NICK' alias, replies
+//    'TRTP' + error 0, and rejects version != 1 with reason 1;
 //  * receive policy: a header with totalSize == 0, dataSize == 0, or
 //    either above max_receive_size kills the connection (2 MB framework
 //    default, 512 KB server override), enforced AFTER the crypto header
@@ -28,23 +31,15 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
-#include <memory>
+#include <map>
 #include <span>
 #include <vector>
 
 #include "appwarrior/net/socket.h"
 #include "hotline/protocol/constants.h"
 #include "hotline/protocol/transaction.h"
-
-// Component switches (defined by the build; see CMake options
-// BUILD_CLIENT / BUILD_SERVER).
-#if !defined(HOTLINE_BUILD_CLIENT)
-#define HOTLINE_BUILD_CLIENT 0
-#endif
-#if !defined(HOTLINE_BUILD_SERVER)
-#define HOTLINE_BUILD_SERVER 0
-#endif
 
 namespace hotline::net {
 
@@ -94,30 +89,21 @@ struct ConnectionCryptoHooks {
   std::function<void(std::span<std::byte>, std::uint8_t)> decode_data;
 };
 
-namespace detail {
-#if HOTLINE_BUILD_CLIENT
-class ClientCore;
-#endif
-#if HOTLINE_BUILD_SERVER
-class ServerCore;
-#endif
-}  // namespace detail
-
-// Client-side connection (the Hotline client's entry point).
-#if HOTLINE_BUILD_CLIENT
-class ClientConnection {
+// The shared connection state machine. Abstract: the establish handshake
+// is role-specific and lives in the derived classes (ClientConnection in
+// the client application project, ServerConnection in the server
+// application project). Everything below the handshake — transaction
+// framing and reassembly, the receive policy, crypto hooks, the send
+// queue — is shared and lives here.
+class ConnectionBase {
  public:
-  ClientConnection(ConnectionConfig config = {}, ConnectionEvents events = {});
-  ~ClientConnection();
-  ClientConnection(ClientConnection&&) noexcept;
-  auto operator=(ClientConnection&&) noexcept -> ClientConnection&;
+  ConnectionBase(ConnectionConfig config, ConnectionEvents events);
+  virtual ~ConnectionBase() = default;
 
-  ClientConnection(const ClientConnection&) = delete;
-  auto operator=(const ClientConnection&) = delete;
-
-  // Attaches a connected socket and sends the handshake immediately.
-  void start(aw::net::Socket socket, std::uint32_t sub_protocol = kSubProtocolHotl,
-             std::uint16_t sub_version = kClientSubVersion);
+  ConnectionBase(const ConnectionBase&) = delete;
+  auto operator=(const ConnectionBase&) = delete;
+  ConnectionBase(ConnectionBase&&) noexcept;
+  auto operator=(ConnectionBase&&) noexcept -> ConnectionBase&;
 
   [[nodiscard]] auto state() const noexcept -> ConnectionState;
   [[nodiscard]] auto descriptor() const noexcept -> aw::net::NativeSocket;
@@ -133,46 +119,51 @@ class ClientConnection {
   void set_crypto(ConnectionCryptoHooks hooks);
   void close() noexcept;
 
- private:
-  std::unique_ptr<detail::ClientCore> core_;
+ protected:
+  enum class ReceiveStage : std::uint8_t { handshake, header, data };
+
+  struct PendingSend {
+    std::vector<std::byte> bytes;
+    std::size_t offset = 0;
+  };
+
+  struct PartialReceive {
+    TransactionHeader header;
+    std::vector<std::byte> data;
+  };
+
+  void queue_bytes(std::vector<std::byte> bytes);
+  void mark_dead() noexcept;
+  void parse_inbound();
+  void complete_transaction(std::vector<std::byte> data);
+  void flush_sends();
+  void mark_established() noexcept {
+    state_ = ConnectionState::established;
+    if (events_.on_established) {
+      events_.on_established();
+    }
+  }
+
+  // Consumes exactly expected_bytes_ of inbound_ and advances the
+  // handshake (role-specific; implemented by the derived classes).
+  virtual void handle_handshake() = 0;
+
+  ConnectionConfig config_;
+  ConnectionEvents events_;
+  aw::net::Socket socket_;
+  ConnectionState state_ = ConnectionState::idle;
+  ConnectionCryptoHooks crypto_;
+
+  ReceiveStage receive_stage_ = ReceiveStage::handshake;
+  std::size_t expected_bytes_ = 0;
+  std::vector<std::byte> inbound_;
+  std::array<std::byte, kTransactionHeaderSize> header_bytes_{};
+  TransactionHeader pending_header_{};
+  std::uint8_t pending_flag_ = 0;
+  std::vector<std::byte> pending_data_;
+  std::map<std::pair<std::uint8_t, std::uint32_t>, PartialReceive> partial_;
+
+  std::deque<PendingSend> send_queue_;
 };
-#endif  // HOTLINE_BUILD_CLIENT
-
-// Server-side connection (the Hotline server's entry point).
-#if HOTLINE_BUILD_SERVER
-class ServerConnection {
- public:
-  ServerConnection(ConnectionConfig config = {}, ConnectionEvents events = {});
-  ~ServerConnection();
-  ServerConnection(ServerConnection&&) noexcept;
-  auto operator=(ServerConnection&&) noexcept -> ServerConnection&;
-
-  ServerConnection(const ServerConnection&) = delete;
-  auto operator=(const ServerConnection&) = delete;
-
-  // Attaches a socket accepted from a listener; the handshake reply is
-  // queued once the client's handshake validates.
-  void start(aw::net::Socket socket);
-
-  [[nodiscard]] auto state() const noexcept -> ConnectionState;
-  [[nodiscard]] auto descriptor() const noexcept -> aw::net::NativeSocket;
-  [[nodiscard]] auto is_dead() const noexcept -> bool;
-  [[nodiscard]] auto remote_sub_protocol() const noexcept -> std::uint32_t;
-  [[nodiscard]] auto remote_version() const noexcept -> std::uint16_t;
-
-  void service_readable();
-  void service_writable();
-
-  void queue_transaction(TransactionType type, std::uint32_t id,
-                         std::span<const std::byte> data, bool is_reply = false,
-                         std::uint32_t error = 0);
-  void queue_keepalive();
-  void set_crypto(ConnectionCryptoHooks hooks);
-  void close() noexcept;
-
- private:
-  std::unique_ptr<detail::ServerCore> core_;
-};
-#endif  // HOTLINE_BUILD_SERVER
 
 }  // namespace hotline::net

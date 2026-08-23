@@ -21,10 +21,11 @@ option(HOTLINE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(HOTLINE_BUILD_TESTS "Build Hotline tests" ON)
 option(HOTLINE_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
 
-# Hotline application components. Each gates the code of the respective
-# component (connection role cores, session, and the future application
-# libraries) behind compile-time switches — a server-only build carries no
-# client code and vice versa.
+# Hotline application components. Each gates its own project (directory):
+# the client application project carries only client-side code, the server
+# application project only server-side code, and the role-neutral
+# connection base in hotline::net is shared by both — a server-only build
+# carries no client code and vice versa.
 option(BUILD_CLIENT "Build the Hotline client component" ON)
 option(BUILD_SERVER "Build the Hotline server component" ON)
 option(BUILD_TRACKER "Build the Hotline tracker component (future application; the tracker wire codecs are always available)" ON)
@@ -46,6 +47,15 @@ include(Sanitizers)
 add_subdirectory(src/appwarrior)
 add_subdirectory(src/hotline/protocol)
 add_subdirectory(src/hotline/net)
+
+# Application projects, gated per component.
+if(BUILD_CLIENT)
+  add_subdirectory(src/hotline/client)
+endif()
+if(BUILD_SERVER)
+  add_subdirectory(src/hotline/server)
+endif()
+# BUILD_TRACKER will gate src/hotline/tracker when the tracker application lands.
 
 if(HOTLINE_BUILD_TESTS)
   enable_testing()
